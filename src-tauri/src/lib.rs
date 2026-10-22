@@ -101,6 +101,11 @@ fn close_window(window: tauri::Window) {
     let _ = window.close();
 }
 
+#[tauri::command]
+fn start_drag(window: tauri::Window) {
+    let _ = window.start_dragging();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -142,6 +147,7 @@ pub fn run() {
             minimize_window,
             toggle_maximize_window,
             close_window,
+            start_drag,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
