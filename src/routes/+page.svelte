@@ -1,4 +1,5 @@
 <script lang="ts">
+  import TopBar from '$lib/components/TopBar.svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
   import SearchView from '$lib/components/SearchView.svelte';
   import LikedView from '$lib/components/LikedView.svelte';
@@ -38,26 +39,32 @@
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<main class="w-screen h-screen flex bg-[#0c0d12] text-neutral-100 overflow-hidden font-sans select-none">
-  <!-- Left Sidebar with Navigation & Built-in Player -->
-  <Sidebar
-    {currentTab}
-    onSelectTab={(tab: 'search' | 'liked' | 'cache' | 'explore') => (currentTab = tab)}
-  />
+<div class="w-screen h-screen flex flex-col bg-[#09090b] text-neutral-200 overflow-hidden font-sans select-none border border-white/5">
+  <!-- Custom Monochromatic Window Titlebar -->
+  <TopBar />
 
-  <!-- Main View Area -->
-  <section class="flex-1 h-screen flex flex-col relative overflow-hidden bg-gradient-to-b from-[#10121a] to-[#0c0d12]">
-    {#if currentTab === 'search'}
-      <SearchView />
-    {:else if currentTab === 'liked'}
-      <LikedView />
-    {:else if currentTab === 'cache'}
-      <CacheView />
-    {:else if currentTab === 'explore'}
-      <ExploreView />
-    {/if}
-  </section>
+  <!-- Body: Sidebar + Main Content -->
+  <div class="flex-1 flex overflow-hidden">
+    <!-- Left Sidebar -->
+    <Sidebar
+      {currentTab}
+      onSelectTab={(tab: 'search' | 'liked' | 'cache' | 'explore') => (currentTab = tab)}
+    />
 
-  <!-- Synchronized Lyrics Overlay -->
+    <!-- Main Content Area -->
+    <main class="flex-1 h-full flex flex-col relative overflow-hidden bg-[#0a0a0c]">
+      {#if currentTab === 'search'}
+        <SearchView />
+      {:else if currentTab === 'liked'}
+        <LikedView />
+      {:else if currentTab === 'cache'}
+        <CacheView />
+      {:else if currentTab === 'explore'}
+        <ExploreView />
+      {/if}
+    </main>
+  </div>
+
+  <!-- Synchronized Lyrics Modal -->
   <LyricsModal />
-</main>
+</div>

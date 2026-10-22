@@ -8,10 +8,10 @@
   let activeCategory = $state<'trending' | 'chill' | 'workout' | 'lofi'>('trending');
 
   const categories = [
-    { id: 'trending', label: '🔥 Top Trending', query: 'Top Hits Global 2026' },
-    { id: 'chill', label: '☕ Chill Vibes', query: 'Chill Acoustic Vibes' },
-    { id: 'workout', label: '⚡ Gym & Phonk', query: 'Phonk Workout Motivation' },
-    { id: 'lofi', label: '🌙 Lofi Sleep / Study', query: 'Lofi Beats to relax study to' },
+    { id: 'trending', label: 'Trending', query: 'Top Hits Global' },
+    { id: 'chill', label: 'Chill', query: 'Chill Acoustic Vibes' },
+    { id: 'workout', label: 'Gym', query: 'Phonk Workout Motivation' },
+    { id: 'lofi', label: 'Lofi', query: 'Lofi Beats to relax study to' },
   ];
 
   async function loadCategory(catId: 'trending' | 'chill' | 'workout' | 'lofi') {
@@ -35,18 +35,16 @@
   });
 </script>
 
-<div class="flex-1 h-screen overflow-y-auto p-8 flex flex-col gap-6">
-  <!-- Header -->
-  <div class="flex flex-col gap-2 border-b border-white/5 pb-6">
-    <h1 class="text-2xl font-bold text-white tracking-tight">Explore Quick Picks</h1>
-    <p class="text-xs text-neutral-400">Stream or cache instantly from YouTube's top picks</p>
+<div class="flex-1 h-full overflow-y-auto p-6 flex flex-col gap-5">
+  <!-- Minimalist Header & Category Selector -->
+  <div class="flex items-center justify-between border-b border-white/5 pb-4">
+    <h1 class="text-base font-semibold text-white tracking-tight">Explore</h1>
 
-    <!-- Category Pills -->
-    <div class="flex items-center gap-2 pt-2">
+    <div class="flex items-center gap-1.5">
       {#each categories as cat}
         <button
           onclick={() => loadCategory(cat.id as any)}
-          class="px-4 py-2 rounded-xl text-xs font-semibold transition-all {activeCategory === cat.id ? 'bg-pink-600 text-white shadow-lg shadow-pink-600/30' : 'bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10'}"
+          class="px-3 py-1 rounded-md text-xs transition-colors {activeCategory === cat.id ? 'bg-white text-black font-semibold' : 'bg-white/5 text-neutral-400 hover:text-white hover:bg-white/10'}"
         >
           {cat.label}
         </button>
@@ -56,32 +54,35 @@
 
   <!-- Content Grid -->
   {#if isLoading}
-    <div class="flex items-center justify-center py-24 text-neutral-400 text-sm">
-      <div class="w-6 h-6 border-2 border-pink-500 border-t-transparent rounded-full animate-spin"></div>
+    <div class="flex items-center justify-center py-20">
+      <div class="w-5 h-5 border border-white border-t-transparent rounded-full animate-spin"></div>
     </div>
   {:else if trendingSongs.length > 0}
-    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+    <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
       {#each trendingSongs as song}
         <div
+          role="button"
+          tabindex="0"
           onclick={() => player.play(song)}
-          class="group bg-[#151722] hover:bg-neutral-800 p-3 rounded-2xl border border-white/5 hover:border-pink-500/30 cursor-pointer transition-all flex flex-col gap-3 shadow-lg"
+          onkeydown={(e) => { if (e.key === 'Enter') player.play(song); }}
+          class="group bg-[#121214] hover:bg-[#1a1a1d] p-2.5 rounded-lg border border-white/5 cursor-pointer transition-colors flex flex-col gap-2.5"
         >
-          <!-- Thumbnail with Play Button Overlay -->
-          <div class="relative w-full aspect-square rounded-xl overflow-hidden bg-neutral-800">
-            <img src={song.thumb} alt={song.title} class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+          <!-- Thumbnail with Overlay Play Button -->
+          <div class="relative w-full aspect-square rounded bg-neutral-900 overflow-hidden">
+            <img src={song.thumb} alt="" class="w-full h-full object-cover grayscale-20" />
             <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-              <div class="w-10 h-10 rounded-full bg-pink-500 text-white flex items-center justify-center shadow-lg shadow-pink-500/50 transform translate-y-2 group-hover:translate-y-0 transition-transform">
-                <svg class="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <div class="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center shadow">
+                <svg class="w-4 h-4 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
               </div>
             </div>
           </div>
 
           <!-- Metadata -->
           <div class="min-w-0 flex flex-col">
-            <h3 class="text-sm font-semibold text-white truncate group-hover:text-pink-400 transition-colors" title={song.title}>
+            <h3 class="text-xs font-medium text-neutral-200 truncate group-hover:text-white transition-colors" title={song.title}>
               {song.title}
             </h3>
-            <p class="text-xs text-neutral-400 truncate mt-0.5" title={song.artist}>
+            <p class="text-[11px] text-neutral-500 truncate mt-0.5" title={song.artist}>
               {song.artist}
             </p>
           </div>

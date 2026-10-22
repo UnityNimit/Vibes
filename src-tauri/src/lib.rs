@@ -80,6 +80,27 @@ async fn get_song_lyrics(title: String, artist: String, duration_secs: Option<u6
     fetch_lyrics(&title, &artist, duration_secs).await
 }
 
+#[tauri::command]
+fn minimize_window(window: tauri::Window) {
+    let _ = window.minimize();
+}
+
+#[tauri::command]
+fn toggle_maximize_window(window: tauri::Window) {
+    if let Ok(is_max) = window.is_maximized() {
+        if is_max {
+            let _ = window.unmaximize();
+        } else {
+            let _ = window.maximize();
+        }
+    }
+}
+
+#[tauri::command]
+fn close_window(window: tauri::Window) {
+    let _ = window.close();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -118,6 +139,9 @@ pub fn run() {
             toggle_like,
             check_is_liked,
             get_song_lyrics,
+            minimize_window,
+            toggle_maximize_window,
+            close_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
