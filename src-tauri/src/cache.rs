@@ -1,7 +1,12 @@
 use crate::models::{CacheItem, CacheStats, Song};
 use std::fs;
-use std::io::Write;
 use std::path::PathBuf;
+use std::process::Command;
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 pub fn get_app_dir() -> PathBuf {
     let mut base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
@@ -22,7 +27,8 @@ pub fn get_cached_file(video_id: &str) -> Option<PathBuf> {
     let audio_path = cache_dir.join(format!("{}.m4a", video_id));
     if audio_path.exists() {
         if let Ok(metadata) = fs::metadata(&audio_path) {
-            if metadata.len() > 100_000 {
+            // Valid complete tracks are generally > 300KB
+            if metadata.len() > 300_000 {
                 return Some(audio_path);
             }
         }
@@ -39,67 +45,51 @@ pub fn save_song_metadata(song: &Song) -> Result<(), String> {
     Ok(())
 }
 
-pub async fn auto_cache_song(song: Song, stream_url: String) {
+pub async fn auto_cache_song(song: Song) {
     let video_id = song.id.clone();
     let cache_dir = get_cache_dir();
     let audio_path = cache_dir.join(format!("{}.m4a", video_id));
-    let tmp_path = cache_dir.join(format!("{}.m4a.tmp", video_id));
 
     // If already fully cached, skip download
     if audio_path.exists() {
         if let Ok(meta) = fs::metadata(&audio_path) {
-            if meta.len() > 100_000 {
+            if meta.len() > 300_000 {
                 let _ = save_song_metadata(&song);
                 return;
             }
         }
     }
 
-    tokio::spawn(async move {
-        let client = reqwest::Client::new();
-        let resp = match client.get(&stream_url).send().await {
-            Ok(r) => r,
-            Err(e) => {
-                eprintln!("[Cache Error] Failed to fetch stream for {}: {}", video_id, e);
-                return;
+    tokio::task::spawn_blocking(move || {
+        let output_template = cache_dir.join(format!("{}.%(ext)s", video_id));
+        let output_str = output_template.to_string_lossy().to_string();
+        let yt_url = format!("https://www.youtube.com/watch?v={}", video_id);
+
+        let mut cmd = Command::new("yt-dlp");
+        cmd.args([
+            "-f", "ba[ext=m4a]/ba",
+            "-o", &output_str,
+            "--no-playlist",
+            "--quiet",
+            "--no-warnings",
+            &yt_url,
+        ]);
+
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+
+        match cmd.status() {
+            Ok(status) => {
+                if status.success() {
+                    let _ = save_song_metadata(&song);
+                    println!("[Cache Saved] Downloaded: {} ({})", song.title, video_id);
+                } else {
+                    eprintln!("[Cache Error] yt-dlp failed for {}", video_id);
+                }
             }
-        };
-
-        if !resp.status().is_success() {
-            eprintln!("[Cache Error] Bad HTTP status {}: {}", resp.status(), video_id);
-            return;
-        }
-
-        let mut file = match fs::File::create(&tmp_path) {
-            Ok(f) => f,
             Err(e) => {
-                eprintln!("[Cache Error] Failed to create temp cache file: {}", e);
-                return;
+                eprintln!("[Cache Error] Failed to run yt-dlp: {}", e);
             }
-        };
-
-        let bytes = match resp.bytes().await {
-            Ok(b) => b,
-            Err(e) => {
-                eprintln!("[Cache Error] Stream read error {}: {}", video_id, e);
-                let _ = fs::remove_file(&tmp_path);
-                return;
-            }
-        };
-
-        if let Err(e) = file.write_all(&bytes) {
-            eprintln!("[Cache Error] Failed to write cache {}: {}", video_id, e);
-            let _ = fs::remove_file(&tmp_path);
-            return;
-        }
-
-        drop(file);
-
-        if let Err(e) = fs::rename(&tmp_path, &audio_path) {
-            eprintln!("[Cache Error] Failed to finalize cache {}: {}", video_id, e);
-        } else {
-            let _ = save_song_metadata(&song);
-            println!("[Cache Saved] Successfully cached: {} ({})", song.title, video_id);
         }
     });
 }
@@ -118,7 +108,7 @@ pub fn get_cached_songs() -> Result<Vec<CacheItem>, String> {
 
             if audio_path.exists() {
                 if let Ok(meta) = fs::metadata(&audio_path) {
-                    if meta.len() > 100_000 {
+                    if meta.len() > 300_000 {
                         if let Ok(content) = fs::read_to_string(&path) {
                             if let Ok(song) = serde_json::from_str::<Song>(&content) {
                                 let cached_time = meta

@@ -26,17 +26,20 @@ async fn get_stream(song: Song) -> Result<StreamResult, String> {
     if let Some(cached_path) = get_cached_file(&song.id) {
         let path_str = cached_path.to_string_lossy().to_string();
         return Ok(StreamResult {
-            url: format!("vibes-cache://{}", song.id),
+            url: path_str.clone(),
             is_cached: true,
             local_path: Some(path_str),
         });
     }
 
-    // 2. Resolve stream URL from YouTube
+    // 2. Resolve stream URL from YouTube for instant playback
     let stream_url = resolve_stream_url(&song.id).await?;
 
-    // 3. Trigger automatic background cache
-    auto_cache_song(song, stream_url.clone()).await;
+    // 3. Trigger automatic background cache via yt-dlp
+    let song_clone = song.clone();
+    tokio::spawn(async move {
+        auto_cache_song(song_clone).await;
+    });
 
     Ok(StreamResult {
         url: stream_url,
@@ -110,29 +113,6 @@ fn start_drag(window: tauri::Window) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .register_uri_scheme_protocol("vibes-audio", |_app, request| {
-            let uri = request.uri().to_string();
-            // uri: "vibes-audio://34Na4j8AVgA" or "vibes-audio://localhost/34Na4j8AVgA"
-            let video_id = uri
-                .trim_start_matches("vibes-audio://")
-                .trim_start_matches("localhost/")
-                .trim_matches('/');
-
-            if let Some(path) = cache::get_cached_file(video_id) {
-                if let Ok(bytes) = std::fs::read(&path) {
-                    return tauri::http::Response::builder()
-                        .header("Content-Type", "audio/mp4")
-                        .header("Access-Control-Allow-Origin", "*")
-                        .body(bytes)
-                        .unwrap();
-                }
-            }
-
-            tauri::http::Response::builder()
-                .status(404)
-                .body(Vec::new())
-                .unwrap()
-        })
         .invoke_handler(tauri::generate_handler![
             search_music,
             get_search_suggestions,

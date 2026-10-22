@@ -1,4 +1,4 @@
-import { invoke } from '@tauri-apps/api/core';
+import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import type { Song, StreamResult, LyricLine } from './types';
 
 class PlayerState {
@@ -163,9 +163,9 @@ class PlayerState {
       const streamRes = await invoke<StreamResult>('get_stream', { song });
       this.isCached = streamRes.is_cached;
 
-      if (streamRes.is_cached) {
-        // Stream from our high-performance local protocol
-        this.audio.src = `vibes-audio://${song.id}`;
+      if (streamRes.is_cached && streamRes.local_path) {
+        // High-performance Range-enabled native asset streaming
+        this.audio.src = convertFileSrc(streamRes.local_path);
       } else {
         // Direct stream from Google CDN
         this.audio.src = streamRes.url;
