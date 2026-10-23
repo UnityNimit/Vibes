@@ -11,6 +11,12 @@ pub struct Song {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchPage {
+    pub songs: Vec<Song>,
+    pub continuation_token: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamResult {
     pub url: String,
     pub is_cached: bool,
@@ -39,4 +45,12 @@ pub struct CacheItem {
 pub struct CacheStats {
     pub total_songs: usize,
     pub total_size_mb: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Playlist {
+    pub id: String,
+    pub name: String,
+    pub created_at: u64,
+    pub songs: Vec<Song>,
 }

@@ -66,6 +66,7 @@ pub async fn auto_cache_song(song: Song) {
         let yt_url = format!("https://www.youtube.com/watch?v={}", video_id);
 
         let mut cmd = Command::new("yt-dlp");
+        cmd.env("PYTHONHTTPSVERIFY", "0");
         cmd.args([
             "-f", "ba[ext=m4a]/ba",
             "-o", &output_str,
@@ -92,6 +93,51 @@ pub async fn auto_cache_song(song: Song) {
             }
         }
     });
+}
+
+pub async fn download_song_async(song: Song) -> Result<(), String> {
+    let video_id = song.id.clone();
+    let cache_dir = get_cache_dir();
+    let audio_path = cache_dir.join(format!("{}.m4a", video_id));
+
+    if audio_path.exists() {
+        if let Ok(meta) = fs::metadata(&audio_path) {
+            if meta.len() > 300_000 {
+                let _ = save_song_metadata(&song);
+                return Ok(());
+            }
+        }
+    }
+
+    tokio::task::spawn_blocking(move || {
+        let output_template = cache_dir.join(format!("{}.%(ext)s", video_id));
+        let output_str = output_template.to_string_lossy().to_string();
+        let yt_url = format!("https://www.youtube.com/watch?v={}", video_id);
+
+        let mut cmd = Command::new("yt-dlp");
+        cmd.env("PYTHONHTTPSVERIFY", "0");
+        cmd.args([
+            "-f", "ba[ext=m4a]/ba",
+            "-o", &output_str,
+            "--no-playlist",
+            "--quiet",
+            "--no-warnings",
+            &yt_url,
+        ]);
+
+        #[cfg(target_os = "windows")]
+        cmd.creation_flags(CREATE_NO_WINDOW);
+
+        let status = cmd.status().map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
+        if status.success() {
+            let _ = save_song_metadata(&song);
+            Ok(())
+        } else {
+            Err("yt-dlp exited with error".to_string())
+        }
+    })
+    .await
+    .map_err(|e| format!("Task join error: {}", e))?
 }
 
 pub fn get_cached_songs() -> Result<Vec<CacheItem>, String> {
@@ -144,6 +190,16 @@ pub fn delete_cache_item(video_id: &str) -> Result<(), String> {
 
     let _ = fs::remove_file(audio_path);
     let _ = fs::remove_file(meta_path);
+    Ok(())
+}
+
+pub fn clear_all_cache_files() -> Result<(), String> {
+    let cache_dir = get_cache_dir();
+    if let Ok(entries) = fs::read_dir(&cache_dir) {
+        for entry in entries.flatten() {
+            let _ = fs::remove_file(entry.path());
+        }
+    }
     Ok(())
 }
 

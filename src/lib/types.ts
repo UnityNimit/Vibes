@@ -7,6 +7,11 @@ export interface Song {
   thumb: string;
 }
 
+export interface SearchPage {
+  songs: Song[];
+  continuation_token?: string | null;
+}
+
 export interface StreamResult {
   url: string;
   is_cached: boolean;
@@ -37,4 +42,20 @@ export interface CacheStats {
 export interface LyricLine {
   time: number; // in seconds
   text: string;
+}
+
+export interface Playlist {
+  id: string;
+  name: string;
+  created_at: number;
+  songs: Song[];
+}
+
+export type PlaybackSourceType = 'search' | 'liked' | 'saved' | 'playlist';
+
+export interface PlaybackContext {
+  type: PlaybackSourceType;
+  title: string;
+  playlistId?: string;
+  songs: Song[];
 }

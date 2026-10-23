@@ -1,31 +1,16 @@
 <script lang="ts">
-  import { invoke } from '@tauri-apps/api/core';
   import { player } from '../player.svelte';
+  import { savedStore } from '../savedStore.svelte';
+  import { likedStore } from '../likedStore.svelte';
+  import { formatSongSize } from '../utils';
+  import TrackImage from './TrackImage.svelte';
+  import PlayingEqualizer from './PlayingEqualizer.svelte';
   import type { Song } from '../types';
-
-  let likedSongs = $state<Song[]>([]);
-  let isLoading = $state(true);
-
-  async function loadLikedSongs() {
-    isLoading = true;
-    try {
-      likedSongs = await invoke<Song[]>('get_liked_songs');
-    } catch (e) {
-      console.error(e);
-    } finally {
-      isLoading = false;
-    }
-  }
-
-  $effect(() => {
-    loadLikedSongs();
-  });
 
   async function removeSong(song: Song, e: MouseEvent) {
     e.stopPropagation();
     try {
-      await invoke('toggle_like', { song });
-      await loadLikedSongs();
+      await likedStore.toggleLike(song);
       if (player.currentSong?.id === song.id) {
         player.isLiked = false;
       }
@@ -33,120 +18,102 @@
       console.error(err);
     }
   }
-
-  function playAll() {
-    if (likedSongs.length === 0) return;
-    player.queue = [...likedSongs];
-    player.play(likedSongs[0]);
-  }
-
-  function shufflePlay() {
-    if (likedSongs.length === 0) return;
-    const shuffled = [...likedSongs].sort(() => Math.random() - 0.5);
-    player.queue = shuffled;
-    player.play(shuffled[0]);
-  }
 </script>
 
-<div class="flex-1 h-full overflow-y-auto p-6 flex flex-col gap-5">
-  <!-- Minimalist Header -->
-  <div class="flex items-center justify-between border-b border-white/5 pb-4">
-    <div>
-      <h1 class="text-base font-semibold text-white tracking-tight">Liked Songs</h1>
-      <p class="text-xs text-neutral-500 font-mono mt-0.5">
-        {likedSongs.length} {likedSongs.length === 1 ? 'track' : 'tracks'}
-      </p>
-    </div>
-
-    {#if likedSongs.length > 0}
-      <div class="flex items-center gap-2">
-        <button
-          onclick={shufflePlay}
-          class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-neutral-300 hover:text-white text-xs border border-white/5 transition-colors flex items-center gap-1.5"
-          title="Shuffle"
-        >
-          <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
-          </svg>
-          <span>Shuffle</span>
-        </button>
-
-        <button
-          onclick={playAll}
-          class="px-3.5 py-1.5 rounded-lg bg-white hover:bg-neutral-200 text-black text-xs font-medium transition-colors flex items-center gap-1.5"
-        >
-          <svg class="w-3 h-3 fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-          <span>Play All</span>
-        </button>
-      </div>
-    {/if}
+<div class="flex-1 h-full overflow-y-auto px-6 pt-3 pb-28 flex flex-col gap-5 select-none font-sans bg-black w-full smooth-scroll-container">
+  <!-- Minimalist Header (Full Width, Zero Partition Line) -->
+  <div class="flex items-center justify-between -mb-2 w-full select-none">
+    <p class="text-xs text-neutral-500 font-mono">
+      {likedStore.songs.length} {likedStore.songs.length === 1 ? 'track' : 'tracks'}
+    </p>
   </div>
 
-  <!-- Content -->
-  {#if isLoading}
+  <!-- Content: Strict CSS Grid Alignment & Full Horizontal Expansion -->
+  {#if likedStore.isLoading && likedStore.songs.length === 0}
     <div class="flex items-center justify-center py-20">
-      <div class="w-5 h-5 border border-white border-t-transparent rounded-full animate-spin"></div>
+      <div class="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
     </div>
-  {:else if likedSongs.length > 0}
-    <div class="flex flex-col gap-1 max-w-4xl">
-      {#each likedSongs as song, i}
+  {:else if likedStore.songs.length > 0}
+    <div class="flex flex-col gap-1 w-full">
+      <!-- Grid Column Header -->
+      <div class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 pb-2 text-xs text-neutral-500 font-mono w-full select-none">
+        <span class="text-center">#</span>
+        <span class="font-sans text-left">Track</span>
+        <span class="text-right">Size</span>
+        <span class="text-left">Artist / Album</span>
+        <span class="text-right">Time</span>
+        <span></span>
+      </div>
+
+      <!-- Result Rows -->
+      {#each likedStore.songs as song, i}
         <div
           role="button"
           tabindex="0"
-          onclick={() => player.play(song)}
-          onkeydown={(e) => { if (e.key === 'Enter') player.play(song); }}
-          class="group flex items-center gap-3.5 px-3 py-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors {player.currentSong?.id === song.id ? 'bg-white/10' : ''}"
+          onclick={() => player.play(song, { type: 'liked', title: 'Liked Songs', songs: likedStore.songs }, i)}
+          onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'liked', title: 'Liked Songs', songs: likedStore.songs }, i); }}
+          class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
         >
-          <!-- Index or Wave -->
-          <div class="w-7 text-[11px] text-neutral-600 group-hover:text-white font-mono flex items-center justify-center">
+          <!-- 1. Index or Pulse Equalizer -->
+          <div class="text-xs text-neutral-500 group-hover:text-white font-mono flex items-center justify-center">
             {#if player.currentSong?.id === song.id && player.isPlaying}
-              <div class="flex items-end gap-0.5 h-2.5">
-                <span class="w-0.5 h-full bg-white animate-pulse"></span>
-                <span class="w-0.5 h-2/3 bg-white animate-pulse delay-75"></span>
-                <span class="w-0.5 h-4/5 bg-white animate-pulse delay-150"></span>
-              </div>
+              <PlayingEqualizer isPlaying={player.isPlaying} />
             {:else}
               <span class="group-hover:hidden">{i + 1}</span>
-              <svg class="w-3 h-3 hidden group-hover:block fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              <svg class="w-3.5 h-3.5 hidden group-hover:block fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
             {/if}
           </div>
 
-          <!-- Thumbnail -->
-          <div class="w-9 h-9 rounded bg-neutral-900 overflow-hidden flex-shrink-0">
-            <img src={song.thumb} alt="" class="w-full h-full object-cover grayscale-20" />
+          <!-- 2. Track: Thumbnail + Title -->
+          <div class="flex items-center gap-3 min-w-0">
+            <div class="w-10 h-10 aspect-square rounded-lg bg-[#111114] overflow-hidden flex-shrink-0">
+              <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" iconClass="w-4 h-4 text-neutral-500" />
+            </div>
+            <div class="flex flex-col min-w-0 flex-1">
+              <div class="flex items-center gap-1.5">
+                <h3 class="text-xs sm:text-sm font-medium truncate {player.currentSong?.id === song.id ? 'text-accent' : 'text-neutral-200 group-hover:text-white'}">
+                  {song.title}
+                </h3>
+              </div>
+              <p class="text-xs text-neutral-400 font-normal truncate mt-0.5 md:hidden">
+                {song.artist}
+              </p>
+            </div>
           </div>
 
-          <!-- Title & Artist -->
-          <div class="flex-1 min-w-0">
-            <h3 class="text-xs font-medium truncate {player.currentSong?.id === song.id ? 'text-white font-semibold' : 'text-neutral-200'}">
-              {song.title}
-            </h3>
-            <p class="text-[11px] text-neutral-500 truncate mt-0.5">
-              {song.artist}
-            </p>
+          <!-- 3. Size -->
+          <div class="text-right text-xs text-neutral-400 font-mono">
+            {formatSongSize(savedStore.getSize(song.id), song.duration)}
           </div>
 
-          <!-- Duration -->
-          <div class="text-[11px] text-neutral-500 font-mono pr-2">
+          <!-- 4. Artist / Album -->
+          <div class="text-xs text-neutral-400 font-normal truncate text-left" title={song.album || song.artist}>
+            {song.album || song.artist}
+          </div>
+
+          <!-- 5. Duration -->
+          <div class="text-right text-xs text-neutral-400 font-mono">
             {song.duration}
           </div>
 
-          <!-- Delete Like Action -->
-          <button
-            onclick={(e) => removeSong(song, e)}
-            class="p-1.5 text-neutral-600 hover:text-white transition-colors"
-            title="Remove from Liked"
-          >
-            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
+          <!-- 6. Remove Like Action Button -->
+          <div class="flex items-center justify-end">
+            <button
+              onclick={(e) => removeSong(song, e)}
+              class="p-1.5 text-neutral-600 hover:text-white transition-colors cursor-pointer"
+              title="Remove from Liked"
+            >
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          </div>
         </div>
       {/each}
     </div>
   {:else}
-    <div class="flex flex-col items-center justify-center py-24 text-center">
-      <p class="text-xs text-neutral-500 font-mono">NO LIKED TRACKS</p>
+    <div class="py-24 text-center flex flex-col items-center gap-2">
+      <p class="text-xs text-neutral-500 font-mono">NO LIKED SONGS YET</p>
     </div>
   {/if}
 </div>

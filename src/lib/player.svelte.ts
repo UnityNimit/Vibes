@@ -1,5 +1,9 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
-import type { Song, StreamResult, LyricLine } from './types';
+import type { Song, StreamResult, LyricLine, PlaybackContext, PlaybackSourceType } from './types';
+import { settings } from './settings.svelte';
+import { savedStore } from './savedStore.svelte';
+import { likedStore } from './likedStore.svelte';
+import { feedStore } from './feedStore.svelte';
 
 class PlayerState {
   currentSong = $state<Song | null>(null);
@@ -9,8 +13,16 @@ class PlayerState {
   volume = $state<number>(0.8);
   isMuted = $state<boolean>(false);
   isCached = $state<boolean>(false);
+  isDownloading = $state<boolean>(false);
   isLiked = $state<boolean>(false);
   isLoading = $state<boolean>(false);
+
+  // Playback Context Architecture
+  currentContext = $state<PlaybackContext>({
+    type: 'search',
+    title: 'Search & Explore',
+    songs: [],
+  });
 
   queue = $state<Song[]>([]);
   queueIndex = $state<number>(-1);
@@ -21,11 +33,38 @@ class PlayerState {
   lyrics = $state<{ synced: string | null; plain: string | null }>({ synced: null, plain: null });
   parsedLyrics = $state<LyricLine[]>([]);
   activeLyricIndex = $state<number>(-1);
+  isLoadingLyrics = $state<boolean>(false);
 
   audio: HTMLAudioElement | null = null;
+  onPlaybackChange: ((type: 'play' | 'pause' | 'seek', payload: any) => void) | null = null;
+
+  // Ultra-fast in-memory stream cache & lookahead pre-fetcher
+  private streamCache = new Map<string, { result: StreamResult; timestamp: number }>();
+  private autoCachedCurrent = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
+      const savedVol = localStorage.getItem('vibes_volume');
+      if (savedVol !== null) {
+        const parsed = parseFloat(savedVol);
+        if (!isNaN(parsed)) this.volume = Math.max(0, Math.min(1, parsed));
+      }
+
+      const savedMute = localStorage.getItem('vibes_muted');
+      if (savedMute !== null) {
+        this.isMuted = savedMute === 'true';
+      }
+
+      const savedRepeat = localStorage.getItem('vibes_repeat_mode');
+      if (savedRepeat === 'off' || savedRepeat === 'all' || savedRepeat === 'one') {
+        this.repeatMode = savedRepeat;
+      }
+
+      const savedShuffle = localStorage.getItem('vibes_shuffle');
+      if (savedShuffle !== null) {
+        this.isShuffle = savedShuffle === 'true';
+      }
+
       this.initAudio();
     }
   }
@@ -34,11 +73,25 @@ class PlayerState {
     this.audio = new Audio();
     this.audio.preload = 'auto';
     this.audio.volume = this.volume;
+    this.audio.muted = this.isMuted;
 
     this.audio.addEventListener('timeupdate', () => {
       if (this.audio) {
         this.currentTime = this.audio.currentTime;
         this.updateActiveLyric();
+
+        // 1. Delayed auto-cache: only starts after 15s of uninterrupted listening
+        if (!this.autoCachedCurrent && this.currentTime >= 15 && settings.autoSave && !this.isCached && this.currentSong) {
+          this.autoCachedCurrent = true;
+          invoke('trigger_auto_cache', { song: this.currentSong }).catch(() => {});
+        }
+
+        // 2. Queue lookahead prefetch when approaching end of song
+        if (this.duration > 0 && this.currentTime >= this.duration - 15) {
+          if (this.queueIndex >= 0 && this.queueIndex + 1 < this.queue.length) {
+            this.prefetchStream(this.queue[this.queueIndex + 1]);
+          }
+        }
       }
     });
 
@@ -51,6 +104,13 @@ class PlayerState {
     this.audio.addEventListener('playing', () => {
       this.isPlaying = true;
       this.isLoading = false;
+      if (this.currentSong) {
+        feedStore.recordPlay(this.currentSong);
+      }
+      // Predictive prefetch of next track in queue for instant 0ms transition
+      if (this.queueIndex >= 0 && this.queueIndex + 1 < this.queue.length) {
+        this.prefetchStream(this.queue[this.queueIndex + 1]);
+      }
     });
 
     this.audio.addEventListener('pause', () => {
@@ -78,7 +138,9 @@ class PlayerState {
 
   private updateActiveLyric() {
     if (this.parsedLyrics.length === 0) {
-      this.activeLyricIndex = -1;
+      if (this.activeLyricIndex !== -1) {
+        this.activeLyricIndex = -1;
+      }
       return;
     }
     const ct = this.currentTime;
@@ -90,7 +152,9 @@ class PlayerState {
         break;
       }
     }
-    this.activeLyricIndex = idx;
+    if (this.activeLyricIndex !== idx) {
+      this.activeLyricIndex = idx;
+    }
   }
 
   private parseLyrics(synced: string): LyricLine[] {
@@ -114,9 +178,59 @@ class PlayerState {
     return result;
   }
 
-  async play(song: Song) {
+  async prefetchStream(song: Song | null | undefined) {
+    if (!song || !song.id) return;
+    if (savedStore.isSaved(song.id)) return;
+    const cached = this.streamCache.get(song.id);
+    if (cached && Date.now() - cached.timestamp < 3.5 * 60 * 60 * 1000) {
+      return;
+    }
+    try {
+      const res = await invoke<StreamResult>('prefetch_stream', { song });
+      this.streamCache.set(song.id, { result: res, timestamp: Date.now() });
+    } catch {
+      // Background prefetch ignore
+    }
+  }
+
+  async play(
+    song: Song,
+    context?: { type: PlaybackSourceType; title: string; playlistId?: string; songs?: Song[] },
+    startIndex?: number,
+    fromSync = false
+  ) {
     if (!this.audio) this.initAudio();
     if (!this.audio) return;
+
+    // Update context & queue if explicitly provided
+    if (context) {
+      const songsList = context.songs && context.songs.length > 0 ? [...context.songs] : [song];
+      this.currentContext = {
+        type: context.type,
+        title: context.title,
+        playlistId: context.playlistId,
+        songs: songsList,
+      };
+      this.queue = songsList;
+      if (startIndex !== undefined && startIndex >= 0 && startIndex < songsList.length) {
+        this.queueIndex = startIndex;
+      } else {
+        const foundIdx = this.queue.findIndex((s) => s.id === song.id);
+        this.queueIndex = foundIdx !== -1 ? foundIdx : 0;
+      }
+    } else {
+      // Retain current context & queue
+      const existingIdx = this.queue.findIndex((s) => s.id === song.id);
+      if (existingIdx !== -1) {
+        this.queueIndex = existingIdx;
+      } else {
+        this.queue.push(song);
+        this.queueIndex = this.queue.length - 1;
+        if (this.currentContext.type === 'search') {
+          this.currentContext.songs.push(song);
+        }
+      }
+    }
 
     // Check if clicked the same song
     if (this.currentSong?.id === song.id && this.audio.src) {
@@ -127,27 +241,19 @@ class PlayerState {
 
     this.currentSong = song;
     this.isLoading = true;
+    this.autoCachedCurrent = false;
     this.currentTime = 0;
     this.duration = 0;
     this.activeLyricIndex = -1;
     this.parsedLyrics = [];
     this.lyrics = { synced: null, plain: null };
 
-    // Update queue if not already in queue
-    const existingIdx = this.queue.findIndex(s => s.id === song.id);
-    if (existingIdx !== -1) {
-      this.queueIndex = existingIdx;
-    } else {
-      this.queue.push(song);
-      this.queueIndex = this.queue.length - 1;
-    }
-
-    // Check liked status in background
-    invoke<boolean>('check_is_liked', { id: song.id })
-      .then(liked => { this.isLiked = liked; })
-      .catch(() => {});
+    // Initialize cached status from local saved store & liked status from liked store
+    this.isCached = savedStore.isSaved(song.id);
+    this.isLiked = likedStore.isLiked(song.id);
 
     // Fetch lyrics in background
+    this.isLoadingLyrics = true;
     invoke<{ synced: string | null; plain: string | null }>('get_song_lyrics', {
       title: song.title,
       artist: song.artist,
@@ -157,10 +263,28 @@ class PlayerState {
       if (res.synced) {
         this.parsedLyrics = this.parseLyrics(res.synced);
       }
-    }).catch(err => console.log('Lyrics not found:', err));
+      this.isLoadingLyrics = false;
+    }).catch(err => {
+      console.log('Lyrics not found:', err);
+      this.isLoadingLyrics = false;
+    });
 
     try {
-      const streamRes = await invoke<StreamResult>('get_stream', { song });
+      // 1. Check ultra-fast in-memory stream cache
+      let streamRes: StreamResult | null = null;
+      const cached = this.streamCache.get(song.id);
+      if (cached && Date.now() - cached.timestamp < 3.5 * 60 * 60 * 1000) {
+        streamRes = cached.result;
+      }
+
+      if (!streamRes) {
+        streamRes = await invoke<StreamResult>('get_stream', { 
+          song, 
+          autoSave: false 
+        });
+        this.streamCache.set(song.id, { result: streamRes, timestamp: Date.now() });
+      }
+
       this.isCached = streamRes.is_cached;
 
       if (streamRes.is_cached && streamRes.local_path) {
@@ -173,31 +297,65 @@ class PlayerState {
 
       await this.audio.play();
       this.isPlaying = true;
+      if (!fromSync && this.onPlaybackChange && this.currentSong) {
+        this.onPlaybackChange('play', { song: this.currentSong, context: this.currentContext, position: 0 });
+      }
     } catch (err) {
       console.error('Failed to get stream:', err);
       this.isLoading = false;
     }
   }
 
+  playQueue(
+    songs: Song[],
+    startIndex = 0,
+    context?: { type: PlaybackSourceType; title: string; playlistId?: string }
+  ) {
+    if (!songs || songs.length === 0) return;
+    const validIdx = Math.max(0, Math.min(startIndex, songs.length - 1));
+    this.play(
+      songs[validIdx],
+      {
+        type: context?.type ?? 'search',
+        title: context?.title ?? 'Queue',
+        playlistId: context?.playlistId,
+        songs,
+      },
+      validIdx
+    );
+  }
+
   togglePlay() {
     if (!this.audio || !this.currentSong) return;
     if (this.isPlaying) {
       this.audio.pause();
+      if (this.onPlaybackChange) {
+        this.onPlaybackChange('pause', { position: this.currentTime });
+      }
     } else {
       this.audio.play();
+      if (this.onPlaybackChange) {
+        this.onPlaybackChange('play', { song: this.currentSong, context: this.currentContext, position: this.currentTime });
+      }
     }
   }
 
-  seek(seconds: number) {
+  seek(seconds: number, fromSync = false) {
     if (!this.audio) return;
     this.audio.currentTime = seconds;
     this.currentTime = seconds;
+    if (!fromSync && this.onPlaybackChange) {
+      this.onPlaybackChange('seek', { position: seconds });
+    }
   }
 
   setVolume(vol: number) {
     this.volume = Math.max(0, Math.min(1, vol));
     if (this.audio) {
       this.audio.volume = this.volume;
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('vibes_volume', String(this.volume));
     }
   }
 
@@ -206,22 +364,55 @@ class PlayerState {
     if (this.audio) {
       this.audio.muted = this.isMuted;
     }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('vibes_muted', String(this.isMuted));
+    }
   }
 
   async toggleLike() {
     if (!this.currentSong) return;
+    const newState = await likedStore.toggleLike(this.currentSong);
+    this.isLiked = newState;
+  }
+
+  async toggleDownload() {
+    if (!this.currentSong || this.isDownloading) return;
+
+    if (this.isCached || savedStore.isSaved(this.currentSong.id)) {
+      try {
+        await invoke('delete_cache', { id: this.currentSong.id });
+        this.isCached = false;
+        await savedStore.refresh();
+      } catch (err) {
+        console.error('Failed to remove cache:', err);
+      }
+      return;
+    }
+
+    this.isDownloading = true;
     try {
-      const newState = await invoke<boolean>('toggle_like', { song: this.currentSong });
-      this.isLiked = newState;
-    } catch (e) {
-      console.error('Error toggling like:', e);
+      await invoke('download_song', { song: this.currentSong });
+      this.isCached = true;
+      await savedStore.refresh();
+    } catch (err) {
+      console.error('Failed to download song:', err);
+    } finally {
+      this.isDownloading = false;
     }
   }
 
   next() {
     if (this.queue.length === 0) return;
     if (this.isShuffle) {
-      const nextIdx = Math.floor(Math.random() * this.queue.length);
+      if (this.queue.length === 1) {
+        this.seek(0);
+        this.audio?.play();
+        return;
+      }
+      let nextIdx = Math.floor(Math.random() * this.queue.length);
+      if (nextIdx === this.queueIndex) {
+        nextIdx = (nextIdx + 1) % this.queue.length;
+      }
       this.play(this.queue[nextIdx]);
     } else if (this.queueIndex < this.queue.length - 1) {
       this.play(this.queue[this.queueIndex + 1]);
@@ -237,6 +428,8 @@ class PlayerState {
     }
     if (this.queueIndex > 0) {
       this.play(this.queue[this.queueIndex - 1]);
+    } else if (this.repeatMode === 'all') {
+      this.play(this.queue[this.queue.length - 1]);
     } else {
       this.seek(0);
     }
@@ -252,13 +445,19 @@ class PlayerState {
   }
 
   toggleRepeat() {
-    if (this.repeatMode === 'off') this.repeatMode = 'all';
-    else if (this.repeatMode === 'all') this.repeatMode = 'one';
+    if (this.repeatMode === 'off') this.repeatMode = 'one';
+    else if (this.repeatMode === 'one') this.repeatMode = 'all';
     else this.repeatMode = 'off';
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('vibes_repeat_mode', this.repeatMode);
+    }
   }
 
   toggleShuffle() {
     this.isShuffle = !this.isShuffle;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('vibes_shuffle', String(this.isShuffle));
+    }
   }
 }
 
