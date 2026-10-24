@@ -1,0 +1,110 @@
+name: Build Desktop (Windows, macOS, Linux)
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-desktop:
+    name: Build Desktop - ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'windows-x86_64'
+            os: windows-latest
+            target: 'x86_64-pc-windows-msvc'
+            artifact_name: 'Vibes-Windows-x64'
+
+          - platform: 'macos-universal'
+            os: macos-14
+            target: 'universal-apple-darwin'
+            artifact_name: 'Vibes-macOS-Universal'
+
+          - platform: 'linux-x86_64'
+            os: ubuntu-22.04
+            target: 'x86_64-unknown-linux-gnu'
+            artifact_name: 'Vibes-Linux-x64'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Linux build dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf libfuse2
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target == 'universal-apple-darwin' && 'x86_64-apple-darwin, aarch64-apple-darwin' || matrix.target }}
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Build Desktop Release
+        run: |
+          npx tauri build --target ${{ matrix.target }}
+
+      - name: Prepare Windows Deliverables
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path "desktop_dist" -Force
+          # 1. Portable standalone .exe
+          if (Test-Path "src-tauri/target/${{ matrix.target }}/release/tauri-app.exe") {
+            Copy-Item "src-tauri/target/${{ matrix.target }}/release/tauri-app.exe" "desktop_dist/Vibes.exe"
+          } elseif (Test-Path "src-tauri/target/release/tauri-app.exe") {
+            Copy-Item "src-tauri/target/release/tauri-app.exe" "desktop_dist/Vibes.exe"
+          }
+          # 2. Installers (NSIS / MSI)
+          Get-ChildItem -Path "src-tauri/target" -Recurse -Include "*.msi", "*.exe" | Where-Object { $_.FullName -like "*bundle*" } | ForEach-Object {
+            Copy-Item $_.FullName "desktop_dist/$($_.Name)"
+          }
+
+      - name: Prepare macOS Deliverables
+        if: startsWith(matrix.os, 'macos')
+        run: |
+          mkdir -p desktop_dist
+          # 1. Copy .dmg disk images
+          find src-tauri/target -name "*.dmg" -exec cp {} desktop_dist/ \; 2>/dev/null || true
+          # 2. Package .app bundle into zip
+          APP_PATH=$(find src-tauri/target -name "*.app" -type d | head -n 1)
+          if [ -n "$APP_PATH" ]; then
+            APP_DIR=$(dirname "$APP_PATH")
+            APP_NAME=$(basename "$APP_PATH")
+            (cd "$APP_DIR" && zip -r "../../desktop_dist/Vibes-macOS-App.zip" "$APP_NAME") || true
+          fi
+
+      - name: Prepare Linux Deliverables
+        if: matrix.os == 'ubuntu-22.04'
+        run: |
+          mkdir -p desktop_dist
+          # 1. Copy AppImage (universal executable)
+          find src-tauri/target -name "*.AppImage" -exec cp {} desktop_dist/ \; 2>/dev/null || true
+          # 2. Copy Debian package (.deb)
+          find src-tauri/target -name "*.deb" -exec cp {} desktop_dist/ \; 2>/dev/null || true
+
+      - name: Upload Desktop Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: desktop_dist/*
+          if-no-files-found: warn

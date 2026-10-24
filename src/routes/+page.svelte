@@ -51,10 +51,10 @@
     if (e.code === 'Space') {
       e.preventDefault();
       player.togglePlay();
-    } else if (e.code === 'ArrowRight' && e.ctrlKey) {
+    } else if (e.code === 'ArrowRight' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       player.next();
-    } else if (e.code === 'ArrowLeft' && e.ctrlKey) {
+    } else if (e.code === 'ArrowLeft' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       player.prev();
     } else if (e.code === 'ArrowRight') {

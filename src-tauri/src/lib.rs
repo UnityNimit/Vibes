@@ -151,14 +151,24 @@ fn clear_cache(app: tauri::AppHandle) -> Result<(), String> {
 
 #[tauri::command]
 fn open_cache_dir() -> Result<(), String> {
+    let dir = get_cache_dir();
     #[cfg(target_os = "windows")]
     {
-        let dir = get_cache_dir();
         use std::process::Command;
         let mut cmd = Command::new("explorer");
         cmd.arg(&dir);
         cmd.creation_flags(CREATE_NO_WINDOW);
         let _ = cmd.spawn().map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        use std::process::Command;
+        let _ = Command::new("open").arg(&dir).spawn().map_err(|e| format!("Failed to open folder: {}", e))?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        use std::process::Command;
+        let _ = Command::new("xdg-open").arg(&dir).spawn().map_err(|e| format!("Failed to open folder: {}", e))?;
     }
     Ok(())
 }

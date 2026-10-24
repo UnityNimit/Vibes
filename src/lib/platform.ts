@@ -40,7 +40,26 @@ export function isWindows(): boolean {
   return false;
 }
 
+export function isMacOS(): boolean {
+  if (typeof navigator !== 'undefined') {
+    return /macintosh|mac os x/i.test(navigator.userAgent) && !isIOS();
+  }
+  return false;
+}
+
+export function isLinux(): boolean {
+  if (typeof navigator !== 'undefined') {
+    return /linux/i.test(navigator.userAgent) && !isAndroid();
+  }
+  return false;
+}
+
 export function isDesktop(): boolean {
   return !isMobile();
 }
+
+export function getModifierKey(): string {
+  return isMacOS() ? '⌘' : 'Ctrl';
+}
+
 
