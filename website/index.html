@@ -3,16 +3,18 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Vibes — Legendary Free Music Player for All Platforms</title>
+  <title>Vibes — Pure Music for All Devices</title>
   
   <!-- Meta & OpenGraph -->
-  <meta name="description" content="Vibes is an ultra-minimalist, zero-ad music player with real-time peer-to-peer jamming, synchronized lyrics, and offline caching. Available for Windows, macOS, Linux, Android, and iOS." />
-  <meta property="og:title" content="Vibes — The Legendary Music Player" />
-  <meta property="og:description" content="Zero ads. Zero subscriptions. Pure music. Listen together with P2P jamming across Windows, Mac, Linux, Android, and iOS." />
+  <meta name="description" content="Ultra-minimalist, zero-ad music player with peer-to-peer jamming, synchronized lyrics, and offline playback. Available on iOS, Android, Windows, Mac, and Linux." />
+  <meta property="og:title" content="Vibes — Pure Music for All Devices" />
+  <meta property="og:description" content="Zero ads. Zero algorithms. Just pure music across iOS, Android, and Desktop." />
   <meta property="og:type" content="website" />
   <meta property="og:url" content="https://unitynimit.github.io/Vibes/" />
   <meta property="og:image" content="./icon.png" />
   <meta name="theme-color" content="#000000" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
   <link rel="icon" type="image/png" href="./favicon.png" />
   <link rel="apple-touch-icon" href="./icon.png" />
@@ -20,9 +22,9 @@
   <!-- Google Fonts: Inter & JetBrains Mono -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
 
-  <!-- Tailwind CSS CDN for Ultra-Clean Utility Styling -->
+  <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -30,23 +32,26 @@
       theme: {
         extend: {
           fontFamily: {
-            sans: ['Inter', 'sans-serif'],
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
             mono: ['JetBrains Mono', 'monospace'],
           },
           colors: {
             brand: '#ffffff',
             darkbg: '#000000',
             cardbg: '#0a0a0c',
-            borderSubtle: 'rgba(255, 255, 255, 0.08)',
           },
           animation: {
-            'spin-slow': 'spin 18s linear infinite',
-            'pulse-glow': 'pulseGlow 4s ease-in-out infinite',
+            'glow-pulse': 'glowPulse 5s ease-in-out infinite',
+            'fade-in': 'fadeIn 0.3s ease-out',
           },
           keyframes: {
-            pulseGlow: {
-              '0%, 100%': { opacity: '0.4', transform: 'scale(1)' },
-              '50%': { opacity: '0.8', transform: 'scale(1.05)' },
+            glowPulse: {
+              '0%, 100%': { opacity: '0.3', transform: 'scale(1)' },
+              '50%': { opacity: '0.6', transform: 'scale(1.08)' },
+            },
+            fadeIn: {
+              '0%': { opacity: '0', transform: 'translateY(6px)' },
+              '100%': { opacity: '1', transform: 'translateY(0)' },
             }
           }
         }
@@ -55,679 +60,315 @@
   </script>
 
   <style>
-    /* Custom Scrollbar & Selection */
-    ::-webkit-scrollbar {
-      width: 6px;
-      height: 6px;
-    }
-    ::-webkit-scrollbar-track {
-      background: #000000;
-    }
-    ::-webkit-scrollbar-thumb {
-      background: rgba(255, 255, 255, 0.15);
-      border-radius: 9999px;
-    }
-    ::-webkit-scrollbar-thumb:hover {
-      background: rgba(255, 255, 255, 0.3);
-    }
-    ::selection {
-      background: #ffffff;
-      color: #000000;
+    /* Pure Black Background & Native Touch Behavior */
+    html, body {
+      background-color: #000000;
+      color: #eaeaea;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      -webkit-tap-highlight-color: transparent;
     }
 
-    /* CD Grooves effect */
-    .cd-reflection {
-      background: radial-gradient(circle at center, rgba(255,255,255,0.15) 0%, transparent 60%);
+    /* Ambient Glow Behind Official Logo */
+    .logo-ambient {
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.03) 45%, transparent 70%);
     }
 
-    /* Ambient Glow Behind Mockup */
-    .hero-glow {
-      background: radial-gradient(circle, rgba(255,255,255,0.08) 0%, rgba(0,0,0,0) 70%);
+    /* Subtle Glass Border */
+    .subtle-border {
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .subtle-border:hover {
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* Smooth Tap / Active state for Mobile */
+    .touch-action-btn:active {
+      transform: scale(0.97);
     }
   </style>
 </head>
 
-<body class="bg-[#000000] text-neutral-200 font-sans antialiased selection:bg-white selection:text-black overflow-x-hidden min-h-screen flex flex-col justify-between">
+<body class="min-h-screen flex flex-col justify-between selection:bg-white selection:text-black overflow-x-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
 
-  <!-- ==================== NAVIGATION BAR ==================== -->
-  <header class="sticky top-0 z-50 bg-black/80 backdrop-blur-xl border-b border-white/[0.06] transition-all">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
-      <!-- Brand Logo -->
-      <a href="#" class="flex items-center gap-3 group">
-        <div class="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center font-bold text-sm tracking-wider shadow-lg group-hover:scale-105 transition-transform">
-          V
-        </div>
-        <span class="text-lg font-bold text-white tracking-tight">Vibes</span>
+  <!-- ==================== HEADER ==================== -->
+  <header class="w-full max-w-4xl mx-auto px-5 sm:px-8 py-5 flex items-center justify-between z-10">
+    <!-- Brand: Official Logo + Title -->
+    <a href="#" class="flex items-center gap-3 group">
+      <img src="./logo.svg" alt="Vibes" class="w-8 h-8 object-contain transition-transform group-hover:scale-105" />
+      <span class="text-lg font-bold tracking-tight text-white">Vibes</span>
+    </a>
+
+    <!-- Top Navigation Links -->
+    <div class="flex items-center gap-3">
+      <a
+        href="https://github.com/UnityNimit/Vibes"
+        target="_blank"
+        rel="noopener noreferrer"
+        class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium text-neutral-300 bg-white/[0.05] hover:bg-white/[0.12] border border-white/10 transition-colors"
+        aria-label="GitHub Repository"
+      >
+        <!-- GitHub Vector Icon -->
+        <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
+          <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+        </svg>
+        <span class="hidden sm:inline">GitHub</span>
       </a>
-
-      <!-- Nav Links & GitHub Star -->
-      <div class="flex items-center gap-4 sm:gap-6 text-sm">
-        <a href="#features" class="text-neutral-400 hover:text-white transition-colors hidden sm:inline-block">Features</a>
-        <a href="#downloads" class="text-neutral-400 hover:text-white transition-colors">Downloads</a>
-        <a href="#guide" class="text-neutral-400 hover:text-white transition-colors hidden md:inline-block">Install Guide</a>
-        
-        <!-- GitHub Link Button -->
-        <a 
-          href="https://github.com/UnityNimit/Vibes" 
-          target="_blank" 
-          rel="noopener noreferrer"
-          class="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 hover:bg-white/15 text-white border border-white/10 text-xs font-medium transition-all"
-        >
-          <svg class="w-4 h-4 fill-current" viewBox="0 0 24 24">
-            <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
-          </svg>
-          <span>GitHub</span>
-        </a>
-      </div>
     </div>
   </header>
 
-  <!-- ==================== HERO SECTION ==================== -->
-  <main class="flex-1">
-    <section class="relative pt-16 sm:pt-24 pb-16 px-4 sm:px-6 overflow-hidden">
-      <!-- Ambient Glow Behind Hero -->
-      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] hero-glow pointer-events-none rounded-full blur-3xl"></div>
+  <!-- ==================== MAIN CONTENT ==================== -->
+  <main class="flex-1 flex flex-col items-center justify-center px-5 sm:px-6 py-8 sm:py-16 text-center">
+    
+    <div class="w-full max-w-xl mx-auto flex flex-col items-center">
+      
+      <!-- Official Logo Centerpiece with Ambient Glow -->
+      <div class="relative mb-6 sm:mb-8 flex items-center justify-center">
+        <div class="absolute w-36 h-36 sm:w-48 sm:h-48 rounded-full logo-ambient animate-glow-pulse pointer-events-none"></div>
+        <img
+          src="./logo.svg"
+          alt="Vibes Official Logo"
+          class="relative w-24 h-24 sm:w-32 sm:h-32 object-contain drop-shadow-[0_10px_35px_rgba(255,255,255,0.25)] select-none"
+        />
+      </div>
 
-      <div class="max-w-4xl mx-auto text-center relative z-10">
-        
-        <!-- Top Pill Badge -->
-        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.06] border border-white/10 text-neutral-300 text-xs font-mono mb-8 hover:bg-white/[0.09] transition-colors">
-          <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span>v1.0.0 Universal Release • iOS • Android • Windows • Mac • Linux</span>
+      <!-- App Name & Tagline -->
+      <h1 class="text-4xl sm:text-6xl font-extrabold tracking-tight text-white mb-3 sm:mb-4">
+        Vibes
+      </h1>
+      <p class="text-base sm:text-lg text-neutral-400 font-normal max-w-md mx-auto leading-relaxed mb-8 sm:mb-10">
+        Pure sound. Zero ads. Endless music.<br class="hidden sm:inline" />
+        <span class="text-neutral-500 text-sm sm:text-base">Listen together across all your phones, tablets, and computers.</span>
+      </p>
+
+      <!-- ==================== PLATFORM SELECTOR PILLS ==================== -->
+      <div class="w-full max-w-md mb-4 flex items-center justify-center">
+        <div class="inline-flex p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-md overflow-x-auto max-w-full scrollbar-none gap-1" id="platformPills">
+          <button onclick="selectPlatform('ios')" id="btn-tab-ios" class="px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all text-neutral-400 hover:text-white">
+            iOS
+          </button>
+          <button onclick="selectPlatform('android')" id="btn-tab-android" class="px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all text-neutral-400 hover:text-white">
+            Android
+          </button>
+          <button onclick="selectPlatform('windows')" id="btn-tab-windows" class="px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all text-neutral-400 hover:text-white">
+            Windows
+          </button>
+          <button onclick="selectPlatform('macos')" id="btn-tab-macos" class="px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all text-neutral-400 hover:text-white">
+            macOS
+          </button>
+          <button onclick="selectPlatform('linux')" id="btn-tab-linux" class="px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all text-neutral-400 hover:text-white">
+            Linux
+          </button>
         </div>
+      </div>
 
-        <!-- Main Headline -->
-        <h1 class="text-4xl sm:text-6xl md:text-7xl font-extrabold text-white tracking-tight leading-[1.08] mb-6">
-          The Legendary<br/>
-          <span class="bg-gradient-to-r from-white via-neutral-200 to-neutral-400 bg-clip-text text-transparent">
-            Music Player.
+      <!-- ==================== MAIN DOWNLOAD BUTTON ==================== -->
+      <div class="w-full max-w-sm flex flex-col items-center gap-3 mb-6">
+        <a
+          id="mainDownloadBtn"
+          href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.exe"
+          class="w-full py-4 px-6 rounded-2xl bg-white text-black font-semibold text-base shadow-[0_12px_40px_rgba(255,255,255,0.22)] hover:bg-neutral-200 transition-all flex items-center justify-center gap-3 touch-action-btn cursor-pointer"
+        >
+          <!-- Dynamic Platform Icon -->
+          <span id="mainDownloadIcon" class="flex-shrink-0">
+            <!-- Icon injected by JS -->
           </span>
-        </h1>
+          <span id="mainDownloadText" class="font-bold">Download for Windows</span>
+          <span id="mainDownloadBadge" class="text-[11px] font-mono px-2 py-0.5 rounded-md bg-black/10 text-black/70 font-medium ml-auto sm:ml-0">
+            6.6 MB
+          </span>
+        </a>
 
-        <!-- Subtitle -->
-        <p class="text-lg sm:text-xl text-neutral-400 max-w-2xl mx-auto font-normal leading-relaxed mb-10">
-          Zero ads. Zero subscriptions. Real-time peer-to-peer jamming, offline caching, and synchronized lyrics across all your devices.
+        <!-- Dynamic 1-line installation helper note -->
+        <p id="platformHelperNote" class="text-xs text-neutral-400 font-normal leading-relaxed animate-fade-in">
+          Portable 64-bit EXE • No installation needed
         </p>
+      </div>
 
-        <!-- Primary Smart Download CTA (Auto-detects Platform) -->
-        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-6">
-          <a
-            id="primaryDownloadBtn"
-            href="https://github.com/UnityNimit/Vibes/releases/latest"
-            class="w-full sm:w-auto inline-flex items-center justify-center gap-3 px-8 py-4 rounded-2xl bg-white text-black font-semibold text-base shadow-[0_10px_35px_rgba(255,255,255,0.25)] hover:bg-neutral-200 active:scale-95 transition-all cursor-pointer"
-          >
-            <span id="primaryDownloadIcon" class="flex-shrink-0">
-              <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
+      <!-- ==================== ESSENTIAL PILLARS (Clean & Simple) ==================== -->
+      <div class="grid grid-cols-3 gap-2 sm:gap-4 w-full max-w-md pt-8 border-t border-white/[0.06] text-center">
+        <div class="p-2 sm:p-3">
+          <div class="text-xs sm:text-sm font-semibold text-white mb-0.5">Zero Ads</div>
+          <div class="text-[11px] text-neutral-500">Free forever</div>
+        </div>
+        <div class="p-2 sm:p-3 border-x border-white/[0.06]">
+          <div class="text-xs sm:text-sm font-semibold text-white mb-0.5">Live Jam</div>
+          <div class="text-[11px] text-neutral-500">Listen together</div>
+        </div>
+        <div class="p-2 sm:p-3">
+          <div class="text-xs sm:text-sm font-semibold text-white mb-0.5">Offline</div>
+          <div class="text-[11px] text-neutral-500">Cache songs</div>
+        </div>
+      </div>
+
+      <!-- Quick Platform Direct Links Collapse / Reveal -->
+      <div class="mt-8 text-center">
+        <button
+          onclick="toggleAllDownloads()"
+          class="text-xs text-neutral-500 hover:text-neutral-300 transition-colors flex items-center justify-center gap-1.5 mx-auto py-1"
+        >
+          <span>All download formats & direct links</span>
+          <svg id="chevronIcon" class="w-3.5 h-3.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+
+        <!-- Direct Files List (Hidden by default, clean expandable) -->
+        <div id="allDownloadsList" class="hidden mt-4 w-full max-w-sm mx-auto rounded-2xl bg-neutral-950/80 border border-white/10 p-3 text-left animate-fade-in space-y-1">
+          <a href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.ipa" class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.06] transition-colors text-xs">
+            <span class="font-medium text-white flex items-center gap-2">
+              <span>🍎</span> iOS (.ipa)
             </span>
-            <span id="primaryDownloadText">Download Vibes</span>
+            <span class="font-mono text-[11px] text-neutral-400">2.5 MB</span>
           </a>
-
-          <a
-            href="#downloads"
-            class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-white/[0.06] text-white hover:bg-white/10 border border-white/10 font-medium text-base transition-all"
-          >
-            <span>All Platforms</span>
-            <svg class="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+          <a href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.apk" class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.06] transition-colors text-xs">
+            <span class="font-medium text-white flex items-center gap-2">
+              <span>🤖</span> Android (.apk)
+            </span>
+            <span class="font-mono text-neutral-400 text-[11px]">14.2 MB</span>
+          </a>
+          <a href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.exe" class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.06] transition-colors text-xs">
+            <span class="font-medium text-white flex items-center gap-2">
+              <span>🪟</span> Windows (.exe)
+            </span>
+            <span class="font-mono text-neutral-400 text-[11px]">6.6 MB</span>
+          </a>
+          <a href="https://github.com/UnityNimit/Vibes/releases/latest" class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.06] transition-colors text-xs">
+            <span class="font-medium text-white flex items-center gap-2">
+              <span>🍏</span> macOS (.dmg / source)
+            </span>
+            <span class="text-neutral-400 text-[11px]">GitHub →</span>
+          </a>
+          <a href="https://github.com/UnityNimit/Vibes/releases/latest" class="flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.06] transition-colors text-xs">
+            <span class="font-medium text-white flex items-center gap-2">
+              <span>🐧</span> Linux (AppImage / source)
+            </span>
+            <span class="text-neutral-400 text-[11px]">GitHub →</span>
           </a>
         </div>
-
-        <p id="platformNote" class="text-xs font-mono text-neutral-500 mb-14">
-          Detecting your platform...
-        </p>
-
-        <!-- ==================== INTERACTIVE VINYL MOCKUP ==================== -->
-        <div class="relative max-w-2xl mx-auto rounded-3xl border border-white/10 bg-[#070709] shadow-2xl p-6 sm:p-8 backdrop-blur-2xl text-left overflow-hidden">
-          <div class="flex items-center justify-between border-b border-white/[0.06] pb-4 mb-6">
-            <div class="flex items-center gap-2">
-              <span class="w-3 h-3 rounded-full bg-white/20"></span>
-              <span class="w-3 h-3 rounded-full bg-white/10"></span>
-              <span class="w-3 h-3 rounded-full bg-white/10"></span>
-              <span class="text-xs text-neutral-500 font-mono ml-2">Vibes — Now Playing</span>
-            </div>
-            <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/10 text-white/80">JAM LIVE</span>
-          </div>
-
-          <div class="flex flex-col sm:flex-row items-center gap-6">
-            <!-- Poking Vinyl Record Disc with Spin Animation -->
-            <div class="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full flex-shrink-0 animate-spin-slow shadow-[0_12px_40px_rgba(0,0,0,0.9)] border border-white/20 overflow-hidden bg-black flex items-center justify-center">
-              <div class="absolute inset-0 cd-reflection pointer-events-none"></div>
-              <div class="absolute inset-2 rounded-full border border-white/10"></div>
-              <div class="absolute inset-4 rounded-full border border-white/[0.06]"></div>
-              <!-- Center Spindle -->
-              <div class="w-8 h-8 rounded-full bg-black border border-white/40 flex items-center justify-center shadow-lg">
-                <div class="w-2.5 h-2.5 rounded-full bg-white"></div>
-              </div>
-            </div>
-
-            <!-- Player Content -->
-            <div class="flex-1 w-full flex flex-col justify-center">
-              <div class="flex items-center justify-between mb-1">
-                <h3 class="text-lg font-semibold text-white">Midnight City</h3>
-                <span class="text-xs font-mono text-neutral-400">01:42 / 04:03</span>
-              </div>
-              <p class="text-xs text-neutral-400 mb-4">M83 • Offline Cached • 320 kbps</p>
-
-              <!-- Wave Bar Visualizer Simulation -->
-              <div class="w-full h-8 flex items-center gap-1 mb-4 overflow-hidden px-1">
-                <span class="w-1.5 h-3 bg-white/30 rounded-full animate-pulse"></span>
-                <span class="w-1.5 h-6 bg-white/50 rounded-full animate-pulse" style="animation-delay: 0.1s;"></span>
-                <span class="w-1.5 h-8 bg-white rounded-full animate-pulse" style="animation-delay: 0.2s;"></span>
-                <span class="w-1.5 h-5 bg-white rounded-full animate-pulse" style="animation-delay: 0.3s;"></span>
-                <span class="w-1.5 h-7 bg-white rounded-full animate-pulse" style="animation-delay: 0.15s;"></span>
-                <span class="w-1.5 h-4 bg-white/40 rounded-full animate-pulse" style="animation-delay: 0.25s;"></span>
-                <span class="w-1.5 h-7 bg-white/70 rounded-full animate-pulse" style="animation-delay: 0.35s;"></span>
-                <span class="w-1.5 h-3 bg-white/30 rounded-full animate-pulse" style="animation-delay: 0.4s;"></span>
-                <div class="flex-1 h-0.5 bg-white/15 rounded-full ml-1"></div>
-              </div>
-
-              <!-- Synced Lyric Preview -->
-              <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.05] text-xs font-medium text-neutral-300 italic">
-                "The city is my church, it wraps in the blinding twilight..."
-              </div>
-            </div>
-          </div>
-        </div>
-
       </div>
-    </section>
 
-    <!-- ==================== ALL PLATFORMS DOWNLOAD GRID ==================== -->
-    <section id="downloads" class="py-20 px-4 sm:px-6 border-t border-white/[0.06] bg-black">
-      <div class="max-w-6xl mx-auto">
-        <div class="text-center max-w-2xl mx-auto mb-16">
-          <h2 class="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-4">
-            Download for Your Device
-          </h2>
-          <p class="text-neutral-400 text-sm sm:text-base">
-            Engineered natively for low resource usage and instant start on any phone, tablet, or computer.
-          </p>
-        </div>
-
-        <!-- 5-Platform Cards Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-          <!-- 1. WINDOWS CARD -->
-          <div class="p-6 rounded-3xl bg-[#0a0a0c] border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between group">
-            <div>
-              <div class="w-12 h-12 rounded-2xl bg-white/[0.06] flex items-center justify-center mb-5 text-white group-hover:scale-105 transition-transform">
-                <!-- Windows Icon -->
-                <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.901-1.751"/></svg>
-              </div>
-              <h3 class="text-xl font-bold text-white mb-1">Windows</h3>
-              <p class="text-xs text-neutral-400 mb-6">Windows 10 & 11 (64-bit)</p>
-              <ul class="text-xs text-neutral-400 space-y-2 mb-6">
-                <li class="flex items-center gap-2">
-                  <span class="text-emerald-400">✓</span> Portable .exe (zero installation)
-                </li>
-                <li class="flex items-center gap-2">
-                  <span class="text-emerald-400">✓</span> Native Media Flyout key controls
-                </li>
-              </ul>
-            </div>
-            <div class="flex flex-col gap-2 pt-4 border-t border-white/[0.06]">
-              <a
-                id="link-windows"
-                href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.exe"
-                class="w-full py-2.5 px-4 rounded-xl bg-white text-black font-semibold text-xs text-center hover:bg-neutral-200 transition-colors"
-              >
-                Download Portable (.exe)
-              </a>
-              <button onclick="openGuide('windows')" class="text-[11px] text-neutral-400 hover:text-white text-center py-1 cursor-pointer">
-                Installation notes →
-              </button>
-            </div>
-          </div>
-
-          <!-- 2. MACOS CARD -->
-          <div class="p-6 rounded-3xl bg-[#0a0a0c] border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between group">
-            <div>
-              <div class="w-12 h-12 rounded-2xl bg-white/[0.06] flex items-center justify-center mb-5 text-white group-hover:scale-105 transition-transform">
-                <!-- Apple Mac Icon -->
-                <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.61-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76 1.01.08 2.06-.51 2.68-1.26z"/></svg>
-              </div>
-              <h3 class="text-xl font-bold text-white mb-1">macOS</h3>
-              <p class="text-xs text-neutral-400 mb-6">Apple Silicon (M1/M2/M3/M4) & Intel</p>
-              <ul class="text-xs text-neutral-400 space-y-2 mb-6">
-                <li class="flex items-center gap-2">
-                  <span class="text-emerald-400">✓</span> Universal Disk Image (.dmg)
-                </li>
-                <li class="flex items-center gap-2">
-                  <span class="text-emerald-400">✓</span> Native TouchBar & ⌘ keybindings
-                </li>
-              </ul>
-            </div>
-            <div class="flex flex-col gap-2 pt-4 border-t border-white/[0.06]">
-              <a
-                id="link-mac"
-                href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.dmg"
-                class="w-full py-2.5 px-4 rounded-xl bg-white text-black font-semibold text-xs text-center hover:bg-neutral-200 transition-colors"
-              >
-                Download Universal (.dmg)
-              </a>
-              <button onclick="openGuide('mac')" class="text-[11px] text-neutral-400 hover:text-white text-center py-1 cursor-pointer">
-                Gatekeeper notes →
-              </button>
-            </div>
-          </div>
-
-          <!-- 3. ANDROID CARD -->
-          <div class="p-6 rounded-3xl bg-[#0a0a0c] border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between group">
-            <div>
-              <div class="w-12 h-12 rounded-2xl bg-white/[0.06] flex items-center justify-center mb-5 text-white group-hover:scale-105 transition-transform">
-                <!-- Android Icon -->
-                <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.551 0 .9993.4482.9993.9993.0001.5511-.4483.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993c.5511 0 .9993.4482.9993.9993 0 .5511-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5894 8.4069 13.8532 8.1 12 8.1s-3.5894.3069-5.1368.8497L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/></svg>
-              </div>
-              <h3 class="text-xl font-bold text-white mb-1">Android</h3>
-              <p class="text-xs text-neutral-400 mb-6">Android 8.0 to Android 15+</p>
-              <ul class="text-xs text-neutral-400 space-y-2 mb-6">
-                <li class="flex items-center gap-2">
-                  <span class="text-emerald-400">✓</span> Universal Standalone APK
-                </li>
-                <li class="flex items-center gap-2">
-                  <span class="text-emerald-400">✓</span> Background audio & notification controls
-                </li>
-              </ul>
-            </div>
-            <div class="flex flex-col gap-2 pt-4 border-t border-white/[0.06]">
-              <a
-                id="link-android"
-                href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.apk"
-                class="w-full py-2.5 px-4 rounded-xl bg-white text-black font-semibold text-xs text-center hover:bg-neutral-200 transition-colors"
-              >
-                Download APK (.apk)
-              </a>
-              <button onclick="openGuide('android')" class="text-[11px] text-neutral-400 hover:text-white text-center py-1 cursor-pointer">
-                How to install APK →
-              </button>
-            </div>
-          </div>
-
-          <!-- 4. IOS (IPHONE / IPAD) CARD -->
-          <div class="p-6 rounded-3xl bg-[#0a0a0c] border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between group">
-            <div>
-              <div class="w-12 h-12 rounded-2xl bg-white/[0.06] flex items-center justify-center mb-5 text-white group-hover:scale-105 transition-transform">
-                <!-- iPhone Icon -->
-                <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M16 1H8C6.34 1 5 2.34 5 4v16c0 1.66 1.34 3 3 3h8c1.66 0 3-1.34 3-3V4c0-1.66-1.34-3-3-3zm-4 20c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm5-3H7V4h10v14z"/></svg>
-              </div>
-              <h3 class="text-xl font-bold text-white mb-1">iOS</h3>
-              <p class="text-xs text-neutral-400 mb-6">iPhone & iPad (iOS 15 to 18+)</p>
-              <ul class="text-xs text-neutral-400 space-y-2 mb-6">
-                <li class="flex items-center gap-2">
-                  <span class="text-emerald-400">✓</span> Native ARM64 Package (.ipa)
-                </li>
-                <li class="flex items-center gap-2">
-                  <span class="text-emerald-400">✓</span> Dynamic Island & Lock screen player
-                </li>
-              </ul>
-            </div>
-            <div class="flex flex-col gap-2 pt-4 border-t border-white/[0.06]">
-              <a
-                id="link-ios"
-                href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.ipa"
-                class="w-full py-2.5 px-4 rounded-xl bg-white text-black font-semibold text-xs text-center hover:bg-neutral-200 transition-colors"
-              >
-                Download IPA (.ipa)
-              </a>
-              <button onclick="openGuide('ios')" class="text-[11px] text-neutral-400 hover:text-white text-center py-1 cursor-pointer">
-                How to sideload with AltStore / Sideloadly →
-              </button>
-            </div>
-          </div>
-
-          <!-- 5. LINUX CARD -->
-          <div class="p-6 rounded-3xl bg-[#0a0a0c] border border-white/10 hover:border-white/20 transition-all flex flex-col justify-between group">
-            <div>
-              <div class="w-12 h-12 rounded-2xl bg-white/[0.06] flex items-center justify-center mb-5 text-white group-hover:scale-105 transition-transform">
-                <!-- Linux Penguin Icon -->
-                <svg class="w-6 h-6 fill-current" viewBox="0 0 24 24"><path d="M12 2C9.5 2 8 3.5 8 5.5c0 .3.05.7.1 1C6.8 7.3 6 8.8 6 10.5c0 1.2.5 2.3 1.2 3.1-.1.4-.2.9-.2 1.4 0 2.8 2.2 5 5 5s5-2.2 5-5c0-.5-.1-1-.2-1.4.7-.8 1.2-1.9 1.2-3.1 0-1.7-.8-3.2-2.1-4 .05-.3.1-.7.1-1C16 3.5 14.5 2 12 2zm-1.5 5a1 1 0 110 2 1 1 0 010-2zm3 0a1 1 0 110 2 1 1 0 010-2z"/></svg>
-              </div>
-              <h3 class="text-xl font-bold text-white mb-1">Linux</h3>
-              <p class="text-xs text-neutral-400 mb-6">Ubuntu, Debian, Fedora, Arch & more</p>
-              <ul class="text-xs text-neutral-400 space-y-2 mb-6">
-                <li class="flex items-center gap-2">
-                  <span class="text-emerald-400">✓</span> Universal .AppImage (No install required)
-                </li>
-                <li class="flex items-center gap-2">
-                  <span class="text-emerald-400">✓</span> Native Debian / Ubuntu .deb package
-                </li>
-              </ul>
-            </div>
-            <div class="flex flex-col gap-2 pt-4 border-t border-white/[0.06]">
-              <a
-                id="link-linux"
-                href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.AppImage"
-                class="w-full py-2.5 px-4 rounded-xl bg-white text-black font-semibold text-xs text-center hover:bg-neutral-200 transition-colors"
-              >
-                Download AppImage (.AppImage)
-              </a>
-              <a
-                id="link-linux-deb"
-                href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.deb"
-                class="text-[11px] text-neutral-400 hover:text-white text-center py-1"
-              >
-                Download .deb package →
-              </a>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </section>
-
-    <!-- ==================== FEATURES SECTION ==================== -->
-    <section id="features" class="py-20 px-4 sm:px-6 border-t border-white/[0.06] bg-[#040405]">
-      <div class="max-w-6xl mx-auto">
-        <div class="text-center max-w-2xl mx-auto mb-16">
-          <h2 class="text-3xl sm:text-4xl font-bold text-white tracking-tight mb-4">
-            Built for Music Purists
-          </h2>
-          <p class="text-neutral-400 text-sm sm:text-base">
-            No bloated social feeds, no recurring paywalls, no audio interruptions.
-          </p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-
-          <!-- Feature 1: Jamming -->
-          <div class="p-8 rounded-3xl bg-[#09090b] border border-white/[0.06] text-left">
-            <div class="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center mb-6 text-white text-lg">
-              📡
-            </div>
-            <h3 class="text-lg font-bold text-white mb-2">P2P Real-Time Jamming</h3>
-            <p class="text-sm text-neutral-400 leading-relaxed">
-              Listen to music simultaneously with friends across the globe with millisecond audio synchronization via decentralized WebRTC.
-            </p>
-          </div>
-
-          <!-- Feature 2: 100M+ Songs -->
-          <div class="p-8 rounded-3xl bg-[#09090b] border border-white/[0.06] text-left">
-            <div class="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center mb-6 text-white text-lg">
-              🎵
-            </div>
-            <h3 class="text-lg font-bold text-white mb-2">Infinite Catalog</h3>
-            <p class="text-sm text-neutral-400 leading-relaxed">
-              Access the entire YouTube Music catalog including remixes, live versions, covers, and obscure tracks without video overhead.
-            </p>
-          </div>
-
-          <!-- Feature 3: Synced Lyrics -->
-          <div class="p-8 rounded-3xl bg-[#09090b] border border-white/[0.06] text-left">
-            <div class="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center mb-6 text-white text-lg">
-              🎙️
-            </div>
-            <h3 class="text-lg font-bold text-white mb-2">Synchronized Lyrics</h3>
-            <p class="text-sm text-neutral-400 leading-relaxed">
-              Real-time, timed lyric tracking highlights each verse dynamically as the music plays with an ethereal blur backdrop.
-            </p>
-          </div>
-
-          <!-- Feature 4: Offline Audio Cache -->
-          <div class="p-8 rounded-3xl bg-[#09090b] border border-white/[0.06] text-left">
-            <div class="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center mb-6 text-white text-lg">
-              💾
-            </div>
-            <h3 class="text-lg font-bold text-white mb-2">Offline Direct Caching</h3>
-            <p class="text-sm text-neutral-400 leading-relaxed">
-              Save your favorite tracks directly into device storage for plane rides, road trips, and spotty Wi-Fi with lossless playback.
-            </p>
-          </div>
-
-          <!-- Feature 5: Native Performance -->
-          <div class="p-8 rounded-3xl bg-[#09090b] border border-white/[0.06] text-left">
-            <div class="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center mb-6 text-white text-lg">
-              ⚡
-            </div>
-            <h3 class="text-lg font-bold text-white mb-2">Rust Powered Speed</h3>
-            <p class="text-sm text-neutral-400 leading-relaxed">
-              Built on Tauri v2 and Rust. Uses a fraction of the RAM that Electron apps use, starting instantly with zero battery drain.
-            </p>
-          </div>
-
-          <!-- Feature 6: Pure Privacy -->
-          <div class="p-8 rounded-3xl bg-[#09090b] border border-white/[0.06] text-left">
-            <div class="w-10 h-10 rounded-xl bg-white/[0.06] flex items-center justify-center mb-6 text-white text-lg">
-              🛡️
-            </div>
-            <h3 class="text-lg font-bold text-white mb-2">Zero Tracking</h3>
-            <p class="text-sm text-neutral-400 leading-relaxed">
-              No account required. Your listening history and saved playlists never leave your device. 100% free and open-source.
-            </p>
-          </div>
-
-        </div>
-      </div>
-    </section>
-
-    <!-- ==================== SIMPLE INSTALL GUIDE ==================== -->
-    <section id="guide" class="py-20 px-4 sm:px-6 border-t border-white/[0.06] bg-black">
-      <div class="max-w-4xl mx-auto">
-        <div class="text-center mb-12">
-          <h2 class="text-3xl font-bold text-white tracking-tight mb-3">
-            Quick Installation Guide
-          </h2>
-          <p class="text-neutral-400 text-sm">
-            Because Vibes is independently open source, here is how to install on mobile & desktop in 30 seconds.
-          </p>
-        </div>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-
-          <!-- Android & Windows Box -->
-          <div class="p-6 rounded-2xl bg-[#0a0a0c] border border-white/10">
-            <h3 class="text-base font-semibold text-white mb-3 flex items-center gap-2">
-              <span>Android & Windows</span>
-            </h3>
-            <ol class="text-xs text-neutral-400 space-y-2.5 list-decimal list-inside leading-relaxed">
-              <li><strong class="text-white">Android:</strong> Download the <code class="text-neutral-300">.apk</code> file. When prompted, tap "Settings" and toggle "Allow from this source" to complete the install.</li>
-              <li><strong class="text-white">Windows:</strong> Download <code class="text-neutral-300">Vibes.exe</code>. If Windows SmartScreen appears on first run, click <em class="text-white">"More info"</em> then <em class="text-white">"Run anyway"</em>.</li>
-            </ol>
-          </div>
-
-          <!-- iOS & Mac Box -->
-          <div class="p-6 rounded-2xl bg-[#0a0a0c] border border-white/10">
-            <h3 class="text-base font-semibold text-white mb-3 flex items-center gap-2">
-              <span>iPhone (iOS) & Mac</span>
-            </h3>
-            <ol class="text-xs text-neutral-400 space-y-2.5 list-decimal list-inside leading-relaxed">
-              <li><strong class="text-white">iPhone:</strong> Download the <code class="text-neutral-300">.ipa</code> and install it via <a href="https://sideloadly.io" target="_blank" class="text-white underline">Sideloadly</a> (plug phone into PC/Mac, drag IPA into Sideloadly, click Start) or AltStore.</li>
-              <li><strong class="text-white">macOS:</strong> Open <code class="text-neutral-300">Vibes.dmg</code> and drag Vibes into Applications. If Gatekeeper blocks it, right-click the app and choose "Open".</li>
-            </ol>
-          </div>
-
-        </div>
-      </div>
-    </section>
+    </div>
   </main>
 
   <!-- ==================== FOOTER ==================== -->
-  <footer class="py-10 px-4 sm:px-6 border-t border-white/[0.06] bg-black text-center text-xs text-neutral-500">
-    <div class="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-      <div class="flex items-center gap-2">
-        <span class="font-bold text-white">Vibes</span>
-        <span>•</span>
-        <span>Crafted with Tauri v2, SvelteKit, and Rust</span>
-      </div>
+  <footer class="w-full max-w-4xl mx-auto px-5 sm:px-8 py-6 flex flex-col sm:flex-row items-center justify-between text-xs text-neutral-500 border-t border-white/[0.04] gap-3">
+    <div class="flex items-center gap-2">
+      <img src="./logo.svg" alt="Vibes" class="w-4 h-4 object-contain opacity-60" />
+      <span>Vibes • Open Source</span>
+    </div>
 
-      <div class="flex items-center gap-6">
-        <a href="https://github.com/UnityNimit/Vibes" class="hover:text-white transition-colors">GitHub Repository</a>
-        <a href="https://github.com/UnityNimit/Vibes/releases" class="hover:text-white transition-colors">All Releases</a>
-        <a href="https://github.com/UnityNimit/Vibes/issues" class="hover:text-white transition-colors">Report Issue</a>
-      </div>
+    <div class="flex items-center gap-4">
+      <a href="https://github.com/UnityNimit/Vibes/releases" class="hover:text-neutral-300 transition-colors">Releases</a>
+      <a href="https://github.com/UnityNimit/Vibes/blob/main/LICENSE" class="hover:text-neutral-300 transition-colors">License</a>
+      <a href="https://github.com/UnityNimit/Vibes/issues" class="hover:text-neutral-300 transition-colors">Issues</a>
     </div>
   </footer>
 
-  <!-- ==================== INTERACTIVE GUIDE MODAL ==================== -->
-  <div id="guideModal" class="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-200">
-    <div class="bg-[#0e0e11] border border-white/15 rounded-3xl max-w-md w-full p-6 text-left shadow-2xl relative">
-      <button onclick="closeGuide()" class="absolute top-5 right-5 text-neutral-400 hover:text-white p-1 cursor-pointer">
-        ✕
-      </button>
-
-      <div id="modalContent"></div>
-    </div>
-  </div>
-
-  <!-- ==================== JAVASCRIPT: AUTO-DETECTION & API SYNC ==================== -->
+  <!-- ==================== SMART PLATFORM LOGIC ==================== -->
   <script>
-    // Platform Detection Logic
-    function detectPlatform() {
-      const ua = navigator.userAgent || '';
-      
-      // iOS detection
-      if (/iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
-        return {
-          os: 'iOS',
-          label: 'Download for iOS (.ipa)',
-          sub: 'Install via Sideloadly, AltStore, or TrollStore',
-          btnId: 'link-ios',
-          url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.ipa'
-        };
+    // Platform configurations
+    const PLATFORMS = {
+      ios: {
+        name: 'iOS',
+        text: 'Download for iOS',
+        badge: '2.5 MB',
+        url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.ipa',
+        note: 'Direct .ipa file • Install with AltStore, Sideloadly, or Scarlet',
+        icon: `<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.61-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76 1.01.08 2.06-.51 2.68-1.26z"/></svg>`
+      },
+      android: {
+        name: 'Android',
+        text: 'Download for Android',
+        badge: '14.2 MB',
+        url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.apk',
+        note: 'Universal APK • Android 7.0+ (Allow install from this source)',
+        icon: `<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-1.0003s.4482-1.0003.9993-1.0003c.5516 0 .9998.4486.9998 1.0003s-.4482 1.0003-.9998 1.0003m-11.046 0c-.5511 0-.9993-.4486-.9993-1.0003s.4482-1.0003.9993-1.0003c.5516 0 .9998.4486.9998 1.0003s-.4482 1.0003-.9998 1.0003m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.4116 13.8533 8.0818 12 8.0818s-3.5902.3298-5.1368.8679L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/></svg>`
+      },
+      windows: {
+        name: 'Windows',
+        text: 'Download for Windows',
+        badge: '6.6 MB',
+        url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.exe',
+        note: 'Portable 64-bit EXE • No installation or admin rights needed',
+        icon: `<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.901-1.751"/></svg>`
+      },
+      macos: {
+        name: 'macOS',
+        text: 'Download for Mac',
+        badge: 'Universal',
+        url: 'https://github.com/UnityNimit/Vibes/releases/latest',
+        note: 'Apple Silicon (M1-M4) & Intel • Grab latest release on GitHub',
+        icon: `<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.61-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76 1.01.08 2.06-.51 2.68-1.26z"/></svg>`
+      },
+      linux: {
+        name: 'Linux',
+        text: 'Download for Linux',
+        badge: '64-bit',
+        url: 'https://github.com/UnityNimit/Vibes/releases/latest',
+        note: 'AppImage & tarball • Grab latest release on GitHub',
+        icon: `<svg class="w-5 h-5 fill-current" viewBox="0 0 24 24"><path d="M12.001 2c-3.15 0-5.71 2.56-5.71 5.71 0 .61.1 1.2.28 1.76C4.461 10.38 3 12.51 3 15c0 3.31 2.69 6 6 6h6c3.31 0 6-2.69 6-6 0-2.49-1.46-4.62-3.57-5.53.18-.56.28-1.15.28-1.76 0-3.15-2.56-5.71-5.709-5.71z"/></svg>`
       }
-
-      // Android detection
-      if (/android/i.test(ua)) {
-        return {
-          os: 'Android',
-          label: 'Download for Android (.apk)',
-          sub: 'Universal Android Package • Android 8.0+',
-          btnId: 'link-android',
-          url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.apk'
-        };
-      }
-
-      // macOS detection
-      if (/macintosh|mac os x/i.test(ua)) {
-        return {
-          os: 'macOS',
-          label: 'Download for Mac (.dmg)',
-          sub: 'Universal Disk Image (Apple Silicon & Intel)',
-          btnId: 'link-mac',
-          url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.dmg'
-        };
-      }
-
-      // Linux detection
-      if (/linux/i.test(ua)) {
-        return {
-          os: 'Linux',
-          label: 'Download for Linux (.AppImage)',
-          sub: 'Universal Standalone Executable',
-          btnId: 'link-linux',
-          url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.AppImage'
-        };
-      }
-
-      // Windows (Default Desktop)
-      return {
-        os: 'Windows',
-        label: 'Download for Windows (.exe)',
-        sub: 'Standalone Portable (Windows 10 & 11, 64-bit)',
-        btnId: 'link-windows',
-        url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.exe'
-      };
-    }
-
-    const currentPlatform = detectPlatform();
-
-    // Update Hero Button based on auto-detection
-    const primaryBtn = document.getElementById('primaryDownloadBtn');
-    const primaryText = document.getElementById('primaryDownloadText');
-    const platformNote = document.getElementById('platformNote');
-
-    if (primaryBtn && primaryText && platformNote) {
-      primaryBtn.href = currentPlatform.url;
-      primaryText.textContent = currentPlatform.label;
-      platformNote.textContent = `Auto-detected ${currentPlatform.os} • ${currentPlatform.sub}`;
-    }
-
-    // Modal Guide Handler
-    const modal = document.getElementById('guideModal');
-    const modalContent = document.getElementById('modalContent');
-
-    const GUIDE_TEXTS = {
-      windows: `
-        <h3 class="text-xl font-bold text-white mb-2">Windows Installation</h3>
-        <p class="text-xs text-neutral-400 mb-4 leading-relaxed">
-          Vibes is a portable 64-bit executable that runs immediately without installing background services.
-        </p>
-        <div class="space-y-3 text-xs text-neutral-300">
-          <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-            <strong class="text-white block mb-1">Step 1: Download</strong>
-            Download <code class="text-white">Vibes.exe</code> and save it anywhere (e.g. your Desktop or Downloads).
-          </div>
-          <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-            <strong class="text-white block mb-1">Step 2: Windows SmartScreen</strong>
-            Because Vibes is free and newly compiled, Windows might show <em>"Windows protected your PC"</em>. Simply click <strong>"More info"</strong> and then <strong>"Run anyway"</strong>.
-          </div>
-        </div>
-      `,
-      mac: `
-        <h3 class="text-xl font-bold text-white mb-2">macOS Installation</h3>
-        <p class="text-xs text-neutral-400 mb-4 leading-relaxed">
-          Supports all modern Macs (Apple Silicon M1/M2/M3/M4 & Intel).
-        </p>
-        <div class="space-y-3 text-xs text-neutral-300">
-          <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-            <strong class="text-white block mb-1">Step 1: Mount DMG</strong>
-            Double click <code class="text-white">Vibes.dmg</code> and drag the Vibes icon into your Applications folder.
-          </div>
-          <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-            <strong class="text-white block mb-1">Step 2: Apple Gatekeeper</strong>
-            If macOS says the developer cannot be verified: Right-click (or Control-click) Vibes in Applications and choose <strong>"Open"</strong>, then click <strong>"Open"</strong> in the prompt.
-          </div>
-        </div>
-      `,
-      android: `
-        <h3 class="text-xl font-bold text-white mb-2">Android Installation</h3>
-        <p class="text-xs text-neutral-400 mb-4 leading-relaxed">
-          Install directly on any Android phone or tablet.
-        </p>
-        <div class="space-y-3 text-xs text-neutral-300">
-          <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-            <strong class="text-white block mb-1">Step 1: Download APK</strong>
-            Tap "Download APK". When browser asks "File might be harmful", tap <strong>Download anyway</strong>.
-          </div>
-          <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-            <strong class="text-white block mb-1">Step 2: Install</strong>
-            Open the downloaded APK. If asked to allow installs from your browser, toggle <strong>Allow from this source</strong> and tap Install.
-          </div>
-        </div>
-      `,
-      ios: `
-        <h3 class="text-xl font-bold text-white mb-2">iOS (iPhone / iPad) Sideloading</h3>
-        <p class="text-xs text-neutral-400 mb-4 leading-relaxed">
-          Because Vibes is independent of the App Store, you can install the .ipa file using Sideloadly (Windows/Mac) or AltStore in 2 minutes.
-        </p>
-        <div class="space-y-3 text-xs text-neutral-300">
-          <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-            <strong class="text-white block mb-1">Easiest Method: Sideloadly</strong>
-            1. Install free <a href="https://sideloadly.io" target="_blank" class="text-white underline">Sideloadly</a> on your PC or Mac.<br/>
-            2. Connect your iPhone via USB.<br/>
-            3. Drag <code class="text-white">Vibes.ipa</code> into Sideloadly and click <strong>Start</strong>.
-          </div>
-          <div class="p-3 rounded-xl bg-white/[0.04] border border-white/[0.06]">
-            <strong class="text-white block mb-1">Trust Profile on iPhone</strong>
-            On your phone, go to <strong>Settings → General → VPN & Device Management</strong> and tap <strong>Trust</strong>.
-          </div>
-        </div>
-      `
     };
 
-    function openGuide(platform) {
-      if (modal && modalContent && GUIDE_TEXTS[platform]) {
-        modalContent.innerHTML = GUIDE_TEXTS[platform];
-        modal.classList.remove('opacity-0', 'pointer-events-none');
+    let activePlatform = 'windows';
+
+    function detectUserPlatform() {
+      const ua = navigator.userAgent || navigator.vendor || window.opera || '';
+      if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
+      if (/Android/i.test(ua)) return 'android';
+      if (/Macintosh|Mac OS X/i.test(ua)) return 'macos';
+      if (/Linux/i.test(ua) && !/Android/i.test(ua)) return 'linux';
+      return 'windows';
+    }
+
+    function selectPlatform(key) {
+      if (!PLATFORMS[key]) return;
+      activePlatform = key;
+      const data = PLATFORMS[key];
+
+      // Update button elements
+      const btn = document.getElementById('mainDownloadBtn');
+      const icon = document.getElementById('mainDownloadIcon');
+      const text = document.getElementById('mainDownloadText');
+      const badge = document.getElementById('mainDownloadBadge');
+      const note = document.getElementById('platformHelperNote');
+
+      btn.href = data.url;
+      icon.innerHTML = data.icon;
+      text.innerText = data.text;
+      badge.innerText = data.badge;
+      note.innerText = data.note;
+
+      // Update active pill state
+      const pillKeys = ['ios', 'android', 'windows', 'macos', 'linux'];
+      pillKeys.forEach(k => {
+        const tab = document.getElementById('btn-tab-' + k);
+        if (k === key) {
+          tab.className = 'px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-white text-black shadow-sm transition-all';
+        } else {
+          tab.className = 'px-3.5 py-1.5 rounded-xl text-xs font-medium text-neutral-400 hover:text-white transition-all';
+        }
+      });
+    }
+
+    function toggleAllDownloads() {
+      const list = document.getElementById('allDownloadsList');
+      const chevron = document.getElementById('chevronIcon');
+      if (list.classList.contains('hidden')) {
+        list.classList.remove('hidden');
+        chevron.classList.add('rotate-180');
+      } else {
+        list.classList.add('hidden');
+        chevron.classList.remove('rotate-180');
       }
     }
 
-    function closeGuide() {
-      if (modal) {
-        modal.classList.add('opacity-0', 'pointer-events-none');
-      }
-    }
-
-    window.addEventListener('click', (e) => {
-      if (e.target === modal) closeGuide();
+    // Auto-detect on page load
+    document.addEventListener('DOMContentLoaded', () => {
+      const detected = detectUserPlatform();
+      selectPlatform(detected);
     });
   </script>
 </body>
