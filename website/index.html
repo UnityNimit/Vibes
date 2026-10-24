@@ -33,20 +33,6 @@
         extend: {
           fontFamily: {
             sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-          },
-          animation: {
-            'glow-pulse': 'glowPulse 5s ease-in-out infinite',
-            'fade-in': 'fadeIn 0.25s ease-out',
-          },
-          keyframes: {
-            glowPulse: {
-              '0%, 100%': { opacity: '0.25', transform: 'scale(1)' },
-              '50%': { opacity: '0.55', transform: 'scale(1.08)' },
-            },
-            fadeIn: {
-              '0%': { opacity: '0', transform: 'translateY(4px)' },
-              '100%': { opacity: '1', transform: 'translateY(0)' },
-            }
           }
         }
       }
@@ -54,7 +40,9 @@
   </script>
 
   <style>
-    /* Absolute Zero Scroll & Pure AMOLED Black */
+    /* ========================================================
+       GPU-ACCELERATED ULTRA-HIGH REFRESH RATE ANIMATIONS (120Hz+)
+       ======================================================== */
     html, body {
       margin: 0;
       padding: 0;
@@ -78,34 +66,176 @@
       height: 0 !important;
     }
 
-    /* Ambient Glow Behind Center Logo */
+    /* Ambient Backlight Pulse */
     .logo-ambient {
-      background: radial-gradient(circle, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.04) 50%, transparent 72%);
+      background: radial-gradient(circle, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.05) 45%, transparent 70%);
+      will-change: transform, opacity;
+      animation: ambientBreathe 5s ease-in-out infinite alternate;
     }
 
-    /* Tactile button press on touch / click */
-    .touch-action-btn:active {
-      transform: scale(0.97);
+    @keyframes ambientBreathe {
+      0% {
+        opacity: 0.3;
+        transform: scale(0.92);
+      }
+      100% {
+        opacity: 0.7;
+        transform: scale(1.15);
+      }
+    }
+
+    /* Organic Floating Levitation */
+    .logo-levitate {
+      will-change: transform;
+      animation: logoFloat 6s ease-in-out infinite alternate;
+    }
+
+    @keyframes logoFloat {
+      0% {
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+      50% {
+        transform: translate3d(0, -6px, 0) scale(1.02);
+      }
+      100% {
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+    }
+
+    /* Subtle Sweeping Vinyl/Glass Sheen across Centerpiece */
+    .shimmer-badge {
+      position: relative;
+      overflow: hidden;
+    }
+
+    .shimmer-badge::after {
+      content: '';
+      position: absolute;
+      top: -100%;
+      left: -100%;
+      width: 300%;
+      height: 300%;
+      background: linear-gradient(
+        115deg,
+        transparent 40%,
+        rgba(255, 255, 255, 0.15) 50%,
+        transparent 60%
+      );
+      transform: translate3d(-100%, 0, 0);
+      animation: sweepSheen 7s ease-in-out infinite;
+      pointer-events-none;
+      will-change: transform;
+    }
+
+    @keyframes sweepSheen {
+      0%, 45% {
+        transform: translate3d(-100%, 0, 0);
+      }
+      65%, 100% {
+        transform: translate3d(100%, 0, 0);
+      }
+    }
+
+    /* Spring-Assisted Kinetic Button */
+    .btn-spring {
+      transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+                  box-shadow 0.25s ease,
+                  background-color 0.2s ease;
+      will-change: transform;
+      touch-action: manipulation;
+    }
+
+    .btn-spring:hover {
+      transform: translate3d(0, -2px, 0) scale(1.02);
+      box-shadow: 0 12px 35px rgba(255, 255, 255, 0.28);
+    }
+
+    .btn-spring:active {
+      transform: translate3d(0, 1px, 0) scale(0.96);
+      box-shadow: 0 4px 15px rgba(255, 255, 255, 0.15);
+      transition-duration: 0.08s;
+    }
+
+    /* Hardware-Accelerated Sliding Pill Glider */
+    #pillGlider {
+      transition: transform 0.32s cubic-bezier(0.16, 1, 0.3, 1),
+                  width 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+      will-change: transform, width;
+    }
+
+    /* Text Flip & Crossfade Transitions */
+    .trans-content {
+      transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+                  opacity 0.18s ease-out;
+      will-change: transform, opacity;
+    }
+
+    /* Staggered Initial Mount Animations */
+    .anim-fade-down {
+      animation: mountDown 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+    .anim-fade-up {
+      animation: mountUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+    }
+
+    @keyframes mountDown {
+      0% {
+        opacity: 0;
+        transform: translate3d(0, -12px, 0);
+      }
+      100% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0);
+      }
+    }
+
+    @keyframes mountUp {
+      0% {
+        opacity: 0;
+        transform: translate3d(0, 16px, 0) scale(0.97);
+      }
+      100% {
+        opacity: 1;
+        transform: translate3d(0, 0, 0) scale(1);
+      }
+    }
+
+    /* Ambient Subtle Deep Aurora in Background */
+    .bg-aurora {
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(ellipse at 50% 30%, rgba(255, 255, 255, 0.035) 0%, transparent 65%);
+      pointer-events-none;
+      z-index: 0;
     }
   </style>
 </head>
 
-<body class="h-full h-[100dvh] max-h-[100dvh] w-full flex flex-col justify-between selection:bg-white selection:text-black overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+<body class="relative h-full h-[100dvh] max-h-[100dvh] w-full flex flex-col justify-between selection:bg-white selection:text-black overflow-hidden pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
+
+  <!-- Subtle Ambient Background Glow -->
+  <div class="bg-aurora"></div>
 
   <!-- ==================== TOP BAR (EDGE TO EDGE) ==================== -->
-  <header class="w-full px-5 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between flex-shrink-0 z-10 border-b border-white/[0.04]">
+  <header class="w-full px-5 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between flex-shrink-0 z-10 border-b border-white/[0.04] anim-fade-down">
     <!-- Left Edge: Official Logo + Title -->
     <a href="#" class="flex items-center gap-2.5 group">
-      <img src="./logo.svg" alt="Vibes" class="w-7 h-7 object-contain transition-transform group-hover:scale-105" />
-      <span class="text-base font-bold tracking-tight text-white">Vibes</span>
+      <img
+        src="./logo.svg"
+        alt="Vibes"
+        class="w-7 h-7 object-contain transition-transform duration-300 ease-out group-hover:scale-110 group-hover:rotate-[-6deg]"
+      />
+      <span class="text-base font-bold tracking-tight text-white transition-colors duration-200 group-hover:text-neutral-300">
+        Vibes
+      </span>
     </a>
 
-    <!-- Right Edge: GitHub Link -->
+    <!-- Right Edge: GitHub Link with spring hover -->
     <a
       href="https://github.com/UnityNimit/Vibes"
       target="_blank"
       rel="noopener noreferrer"
-      class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-300 bg-white/[0.05] hover:bg-white/[0.12] border border-white/10 transition-colors"
+      class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium text-neutral-300 bg-white/[0.05] hover:bg-white/[0.12] border border-white/10 transition-all duration-200 active:scale-95"
       aria-label="GitHub Repository"
     >
       <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
@@ -115,23 +245,28 @@
     </a>
   </header>
 
-  <!-- ==================== MAIN HERO (2X BIGGER LOGO, PERFECT FIT) ==================== -->
-  <main class="flex-1 w-full flex flex-col items-center justify-center text-center my-auto px-4 overflow-hidden">
+  <!-- ==================== MAIN HERO ==================== -->
+  <main class="relative z-10 flex-1 w-full flex flex-col items-center justify-center text-center my-auto px-4 overflow-hidden anim-fade-up">
     
     <div class="w-full max-w-md mx-auto flex flex-col items-center">
       
-      <!-- Official Logo Centerpiece (2X BIGGER with Ambient Backlight Glow) -->
+      <!-- Official Center Logo with Levitation & Sweeping Sheen -->
       <div class="relative mb-3 sm:mb-4 flex items-center justify-center">
-        <div class="absolute w-44 h-44 sm:w-56 sm:h-56 rounded-full logo-ambient animate-glow-pulse pointer-events-none"></div>
-        <img
-          src="./logo.svg"
-          alt="Vibes Official Logo"
-          class="relative w-28 h-28 sm:w-40 sm:h-40 object-contain drop-shadow-[0_12px_40px_rgba(255,255,255,0.28)] select-none"
-        />
+        <!-- Ambient Radial Aura -->
+        <div class="absolute w-48 h-48 sm:w-60 sm:h-60 rounded-full logo-ambient pointer-events-none"></div>
+        
+        <!-- Logo Container with Levitation & Tactile Tap -->
+        <div class="relative w-28 h-28 sm:w-40 sm:h-40 logo-levitate shimmer-badge rounded-3xl flex items-center justify-center cursor-pointer select-none transition-transform duration-300 active:scale-95">
+          <img
+            src="./logo.svg"
+            alt="Vibes Official Logo"
+            class="w-full h-full object-contain drop-shadow-[0_12px_45px_rgba(255,255,255,0.3)]"
+          />
+        </div>
       </div>
 
       <!-- App Name & Tagline -->
-      <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight text-white mb-1">
+      <h1 class="text-3xl sm:text-5xl font-extrabold tracking-tight text-white mb-1 transition-all duration-300">
         Vibes
       </h1>
       <p class="text-xs sm:text-sm text-neutral-400 font-normal max-w-xs sm:max-w-sm mx-auto leading-tight mb-4 sm:mb-5">
@@ -139,60 +274,93 @@
         <span class="text-neutral-500 text-[11px] sm:text-xs">Listen together across all your devices.</span>
       </p>
 
-      <!-- ==================== PLATFORM SELECTOR TABS ==================== -->
+      <!-- ==================== PLATFORM SELECTOR WITH HARDWARE GLIDER ==================== -->
       <div class="w-full max-w-xs sm:max-w-sm mb-3 sm:mb-3.5 flex items-center justify-center">
-        <div class="inline-flex p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-md overflow-x-auto max-w-full scrollbar-none gap-1" id="platformPills">
-          <button onclick="selectPlatform('ios')" id="btn-tab-ios" class="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-medium transition-all text-neutral-400 hover:text-white">
+        <div
+          id="platformPillsContainer"
+          class="relative inline-flex p-1 rounded-2xl bg-white/[0.04] border border-white/[0.08] backdrop-blur-md max-w-full overflow-hidden"
+        >
+          <!-- 120Hz Hardware-Accelerated Sliding Indicator -->
+          <div
+            id="pillGlider"
+            class="absolute top-1 bottom-1 rounded-xl bg-white shadow-sm pointer-events-none"
+            style="transform: translate3d(0, 0, 0); width: 0;"
+          ></div>
+
+          <!-- Buttons with high-contrast text transitions -->
+          <button
+            onclick="selectPlatform('ios', this)"
+            id="btn-tab-ios"
+            class="relative z-10 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-semibold transition-colors duration-200 select-none text-neutral-400 hover:text-white"
+          >
             iOS
           </button>
-          <button onclick="selectPlatform('android')" id="btn-tab-android" class="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-medium transition-all text-neutral-400 hover:text-white">
+          <button
+            onclick="selectPlatform('android', this)"
+            id="btn-tab-android"
+            class="relative z-10 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-semibold transition-colors duration-200 select-none text-neutral-400 hover:text-white"
+          >
             Android
           </button>
-          <button onclick="selectPlatform('windows')" id="btn-tab-windows" class="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-medium transition-all text-neutral-400 hover:text-white">
+          <button
+            onclick="selectPlatform('windows', this)"
+            id="btn-tab-windows"
+            class="relative z-10 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-semibold transition-colors duration-200 select-none text-neutral-400 hover:text-white"
+          >
             Windows
           </button>
-          <button onclick="selectPlatform('macos')" id="btn-tab-macos" class="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-medium transition-all text-neutral-400 hover:text-white">
+          <button
+            onclick="selectPlatform('macos', this)"
+            id="btn-tab-macos"
+            class="relative z-10 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-semibold transition-colors duration-200 select-none text-neutral-400 hover:text-white"
+          >
             macOS
           </button>
-          <button onclick="selectPlatform('linux')" id="btn-tab-linux" class="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-medium transition-all text-neutral-400 hover:text-white">
+          <button
+            onclick="selectPlatform('linux', this)"
+            id="btn-tab-linux"
+            class="relative z-10 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-semibold transition-colors duration-200 select-none text-neutral-400 hover:text-white"
+          >
             Linux
           </button>
         </div>
       </div>
 
-      <!-- ==================== PRIMARY DOWNLOAD ACTION ==================== -->
+      <!-- ==================== PRIMARY DOWNLOAD ACTION (ANIMATED CROSSFADE) ==================== -->
       <div class="w-full max-w-[280px] sm:max-w-xs flex flex-col items-center gap-1.5 mb-1.5">
         <a
           id="mainDownloadBtn"
           href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.exe"
-          class="w-full py-3.5 px-5 rounded-2xl bg-white text-black font-semibold text-sm sm:text-base shadow-[0_8px_30px_rgba(255,255,255,0.22)] hover:bg-neutral-200 transition-all flex items-center justify-center gap-2.5 touch-action-btn cursor-pointer"
+          class="btn-spring w-full py-3.5 px-5 rounded-2xl bg-white text-black font-semibold text-sm sm:text-base shadow-[0_8px_30px_rgba(255,255,255,0.22)] cursor-pointer overflow-hidden flex items-center justify-center"
         >
-          <!-- Dynamic Platform Icon -->
-          <span id="mainDownloadIcon" class="flex-shrink-0"></span>
-          <span id="mainDownloadText" class="font-bold">Download for Windows</span>
-          <span id="mainDownloadBadge" class="text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-md bg-black/10 text-black/70 font-semibold ml-auto sm:ml-0">
-            6.6 MB
-          </span>
+          <!-- Dynamic Content with Smooth Kinetic Crossfade -->
+          <div id="btnContentWrapper" class="trans-content flex items-center justify-center gap-2.5 w-full">
+            <span id="mainDownloadIcon" class="flex-shrink-0"></span>
+            <span id="mainDownloadText" class="font-bold">Download for Windows</span>
+            <span id="mainDownloadBadge" class="text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-md bg-black/10 text-black/70 font-semibold ml-auto sm:ml-0">
+              6.6 MB
+            </span>
+          </div>
         </a>
 
-        <!-- Dynamic 1-line installation helper note -->
-        <p id="platformHelperNote" class="text-[11px] text-neutral-400 font-normal leading-tight animate-fade-in text-center px-1">
+        <!-- Dynamic 1-line installation helper note with smooth flip -->
+        <p id="platformHelperNote" class="trans-content text-[11px] text-neutral-400 font-normal leading-tight text-center px-1">
           Portable 64-bit EXE • No installation needed
         </p>
       </div>
 
       <!-- ==================== ESSENTIAL PILLARS (Clean & Compact) ==================== -->
       <div class="grid grid-cols-3 gap-2 w-full max-w-[280px] sm:max-w-xs pt-3 sm:pt-4 border-t border-white/[0.06] text-center mt-2.5 sm:mt-3.5">
-        <div class="py-0.5">
-          <div class="text-[11px] sm:text-xs font-semibold text-white">Zero Ads</div>
+        <div class="py-0.5 group cursor-default">
+          <div class="text-[11px] sm:text-xs font-semibold text-white transition-transform duration-200 group-hover:scale-105">Zero Ads</div>
           <div class="text-[10px] text-neutral-500">Free forever</div>
         </div>
-        <div class="py-0.5 border-x border-white/[0.06]">
-          <div class="text-[11px] sm:text-xs font-semibold text-white">Live Jam</div>
+        <div class="py-0.5 border-x border-white/[0.06] group cursor-default">
+          <div class="text-[11px] sm:text-xs font-semibold text-white transition-transform duration-200 group-hover:scale-105">Live Jam</div>
           <div class="text-[10px] text-neutral-500">Listen together</div>
         </div>
-        <div class="py-0.5">
-          <div class="text-[11px] sm:text-xs font-semibold text-white">Offline</div>
+        <div class="py-0.5 group cursor-default">
+          <div class="text-[11px] sm:text-xs font-semibold text-white transition-transform duration-200 group-hover:scale-105">Offline</div>
           <div class="text-[10px] text-neutral-500">Cache songs</div>
         </div>
       </div>
@@ -201,22 +369,22 @@
   </main>
 
   <!-- ==================== FOOTER (EDGE TO EDGE) ==================== -->
-  <footer class="w-full px-5 sm:px-8 py-3 sm:py-3.5 flex items-center justify-between text-[11px] text-neutral-500 border-t border-white/[0.04] flex-shrink-0 z-10">
+  <footer class="w-full px-5 sm:px-8 py-3 sm:py-3.5 flex items-center justify-between text-[11px] text-neutral-500 border-t border-white/[0.04] flex-shrink-0 z-10 anim-fade-up">
     <!-- Left Edge: Brand & License -->
-    <div class="flex items-center gap-1.5">
-      <img src="./logo.svg" alt="Vibes" class="w-3.5 h-3.5 object-contain opacity-50" />
-      <span>Vibes • Open Source</span>
+    <div class="flex items-center gap-1.5 group cursor-default">
+      <img src="./logo.svg" alt="Vibes" class="w-3.5 h-3.5 object-contain opacity-50 transition-opacity duration-200 group-hover:opacity-100" />
+      <span class="transition-colors duration-200 group-hover:text-neutral-400">Vibes • Open Source</span>
     </div>
 
-    <!-- Right Edge: Links -->
+    <!-- Right Edge: Links with hover sheen -->
     <div class="flex items-center gap-4">
-      <a href="https://github.com/UnityNimit/Vibes/releases" class="hover:text-neutral-300 transition-colors">Releases</a>
-      <a href="https://github.com/UnityNimit/Vibes/blob/main/LICENSE" class="hover:text-neutral-300 transition-colors">License</a>
-      <a href="https://github.com/UnityNimit/Vibes/issues" class="hover:text-neutral-300 transition-colors">Issues</a>
+      <a href="https://github.com/UnityNimit/Vibes/releases" class="hover:text-neutral-200 transition-colors duration-200 active:scale-95">Releases</a>
+      <a href="https://github.com/UnityNimit/Vibes/blob/main/LICENSE" class="hover:text-neutral-200 transition-colors duration-200 active:scale-95">License</a>
+      <a href="https://github.com/UnityNimit/Vibes/issues" class="hover:text-neutral-200 transition-colors duration-200 active:scale-95">Issues</a>
     </div>
   </footer>
 
-  <!-- ==================== SMART PLATFORM SCRIPT ==================== -->
+  <!-- ==================== KINETIC SCRIPT ENGINE ==================== -->
   <script>
     const PLATFORMS = {
       ios: {
@@ -261,6 +429,8 @@
       }
     };
 
+    let activeKey = null;
+
     function detectUserPlatform() {
       const ua = navigator.userAgent || navigator.vendor || window.opera || '';
       if (/iPhone|iPad|iPod/i.test(ua)) return 'ios';
@@ -270,35 +440,102 @@
       return 'windows';
     }
 
-    function selectPlatform(key) {
-      if (!PLATFORMS[key]) return;
-      const data = PLATFORMS[key];
+    function updateGlider(tab) {
+      const container = document.getElementById('platformPillsContainer');
+      const glider = document.getElementById('pillGlider');
+      if (!tab || !container || !glider) return;
 
+      const tabRect = tab.getBoundingClientRect();
+      const contRect = container.getBoundingClientRect();
+      const left = tabRect.left - contRect.left;
+
+      glider.style.transform = `translate3d(${left}px, 0, 0)`;
+      glider.style.width = `${tabRect.width}px`;
+    }
+
+    function selectPlatform(key, tabEl, isImmediate = false) {
+      if (!PLATFORMS[key]) return;
+      if (activeKey === key && !isImmediate) return;
+      activeKey = key;
+
+      const data = PLATFORMS[key];
+      const targetTab = tabEl || document.getElementById('btn-tab-' + key);
       const btn = document.getElementById('mainDownloadBtn');
+      const wrapper = document.getElementById('btnContentWrapper');
       const icon = document.getElementById('mainDownloadIcon');
       const text = document.getElementById('mainDownloadText');
       const badge = document.getElementById('mainDownloadBadge');
       const note = document.getElementById('platformHelperNote');
 
-      btn.href = data.url;
-      icon.innerHTML = data.icon;
-      text.innerText = data.text;
-      badge.innerText = data.badge;
-      note.innerText = data.note;
+      // Update Glider Position
+      updateGlider(targetTab);
 
-      const pillKeys = ['ios', 'android', 'windows', 'macos', 'linux'];
-      pillKeys.forEach(k => {
+      // Update Tab text states
+      ['ios', 'android', 'windows', 'macos', 'linux'].forEach(k => {
         const tab = document.getElementById('btn-tab-' + k);
         if (k === key) {
-          tab.className = 'px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-semibold bg-white text-black shadow-sm transition-all';
+          tab.classList.remove('text-neutral-400');
+          tab.classList.add('text-black');
         } else {
-          tab.className = 'px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-xl text-xs font-medium text-neutral-400 hover:text-white transition-all';
+          tab.classList.remove('text-black');
+          tab.classList.add('text-neutral-400');
         }
       });
+
+      if (isImmediate) {
+        btn.href = data.url;
+        icon.innerHTML = data.icon;
+        text.innerText = data.text;
+        badge.innerText = data.badge;
+        note.innerText = data.note;
+        return;
+      }
+
+      // Kinetic Crossfade Flip Animation
+      wrapper.style.opacity = '0';
+      wrapper.style.transform = 'translate3d(0, -6px, 0) scale(0.98)';
+      note.style.opacity = '0';
+      note.style.transform = 'translate3d(0, -3px, 0)';
+
+      setTimeout(() => {
+        btn.href = data.url;
+        icon.innerHTML = data.icon;
+        text.innerText = data.text;
+        badge.innerText = data.badge;
+        note.innerText = data.note;
+
+        // Position for slide-in from below
+        wrapper.style.transform = 'translate3d(0, 6px, 0) scale(0.98)';
+        note.style.transform = 'translate3d(0, 3px, 0)';
+
+        // Force browser layout reflow
+        void wrapper.offsetWidth;
+
+        // Smoothly glide into resting position
+        wrapper.style.opacity = '1';
+        wrapper.style.transform = 'translate3d(0, 0, 0) scale(1)';
+        note.style.opacity = '1';
+        note.style.transform = 'translate3d(0, 0, 0)';
+      }, 140);
     }
 
-    document.addEventListener('DOMContentLoaded', () => {
-      selectPlatform(detectUserPlatform());
+    // Auto-detect & mount on load
+    window.addEventListener('DOMContentLoaded', () => {
+      const detected = detectUserPlatform();
+      selectPlatform(detected, null, true);
+      // Ensure glider is positioned after font render
+      setTimeout(() => {
+        const tab = document.getElementById('btn-tab-' + detected);
+        updateGlider(tab);
+      }, 50);
+    });
+
+    // Update glider on window resize / orientation change
+    window.addEventListener('resize', () => {
+      if (activeKey) {
+        const tab = document.getElementById('btn-tab-' + activeKey);
+        updateGlider(tab);
+      }
     });
   </script>
 </body>
