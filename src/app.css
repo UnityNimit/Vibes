@@ -185,6 +185,27 @@ input[type="range"]::-webkit-slider-thumb {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Horizontal Carousel Optimization:
+   - touch-action: pan-x pan-y allows immediate 2D gesture disambiguation
+   - overscroll-behavior-x: contain prevents horizontal swipes from triggering back-navigation
+   - overscroll-behavior-y: auto guarantees vertical scrolling cascades to the parent page
+   - -webkit-overflow-scrolling: touch gives native 120Hz/144Hz momentum physics on mobile
+*/
+.horizontal-carousel {
+  overflow-x: auto;
+  overflow-y: hidden;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-x: contain;
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.horizontal-carousel::-webkit-scrollbar {
+  display: none;
+}
+
 .virtual-scroll-item {
   content-visibility: auto;
   contain-intrinsic-size: 56px;

@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { CacheItem } from './types';
 
 class SavedStore {
@@ -8,6 +9,9 @@ class SavedStore {
   constructor() {
     if (typeof window !== 'undefined') {
       this.refresh();
+      listen('cache-updated', () => {
+        this.refresh();
+      });
     }
   }
 

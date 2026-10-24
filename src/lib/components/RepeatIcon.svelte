@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
 
-  export type RepeatMode = 'off' | 'one' | 'all';
+  export type RepeatMode = 'off' | 'one' | 'shuffle' | 'all';
 
   interface Props {
     mode: RepeatMode;
@@ -34,7 +34,7 @@
     12 - R, 12 - k,  12 - k, 12 - R,  12, 12 - R
   ];
 
-  // 3. All: Circle twists in the center and loops into a proportional 8 / infinity figure
+  // 3. Shuffle / Loop: Circle twists in the center and loops into a proportional 8 / infinity figure
   const P_INFINITY = [
     12, 12,
     14.8, 7.5, 19.8, 7.5, 19.8, 12,
@@ -45,7 +45,7 @@
 
   function getTarget(m: RepeatMode): number[] {
     if (m === 'one') return P_CIRCLE;
-    if (m === 'all') return P_INFINITY;
+    if (m === 'shuffle' || m === 'all') return P_INFINITY;
     return P_LINE;
   }
 
@@ -128,7 +128,7 @@
   viewBox="0 0 24 24"
   fill="none"
   class="overflow-visible select-none pointer-events-none {className}"
-  aria-label={`Repeat mode: ${mode}`}
+  aria-label={`Playback mode: ${mode === 'shuffle' ? 'shuffle' : mode === 'one' ? 'repeat one' : 'off'}`}
 >
   <!-- Morphing Vector Curve (Line -> Circle -> 8 Loop -> Line) -->
   <path

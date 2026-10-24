@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { isAndroid } from '$lib/platform';
 
   interface TooltipPos {
     x: number;
@@ -99,6 +100,22 @@
   }
 
   onMount(() => {
+    if (isAndroid()) {
+      // On Android, disable all hover hints / tooltips entirely
+      const stripTitles = () => {
+        document.querySelectorAll('[title]').forEach(el => el.removeAttribute('title'));
+      };
+      stripTitles();
+      const observer = new MutationObserver(() => stripTitles());
+      observer.observe(document.documentElement, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['title']
+      });
+      return () => observer.disconnect();
+    }
+
     window.addEventListener('mouseover', handlePointerOver, { passive: true });
     window.addEventListener('mouseout', handlePointerOut, { passive: true });
     window.addEventListener('pointerdown', dismiss, { passive: true });

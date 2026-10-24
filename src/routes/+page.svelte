@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { isAndroid } from '$lib/platform';
   import TopBar from '$lib/components/TopBar.svelte';
   import Sidebar from '$lib/components/Sidebar.svelte';
   import SearchView from '$lib/components/SearchView.svelte';
@@ -8,12 +10,18 @@
   import SettingsView from '$lib/components/SettingsView.svelte';
   import PlaylistsView from '$lib/components/PlaylistsView.svelte';
   import BottomPlayer from '$lib/components/BottomPlayer.svelte';
+  import JamModal from '$lib/components/JamModal.svelte';
   import { player } from '$lib/player.svelte';
 
   type Tab = 'search' | 'liked' | 'saved' | 'playlists' | 'settings' | 'now_playing';
 
   let currentTab = $state<Tab>('search');
   let previousTab = $state<Tab>('search');
+  let isMobileAndroid = $state(isAndroid());
+
+  onMount(() => {
+    isMobileAndroid = isAndroid();
+  });
 
   function handleSelectTab(tab: Tab) {
     if (currentTab !== 'now_playing' && tab === 'now_playing') {
@@ -66,7 +74,10 @@
 
 <svelte:window onkeydown={handleKeyDown} />
 
-<div class="w-screen h-screen flex flex-col bg-black text-neutral-200 overflow-hidden font-sans select-none border-none relative">
+<div
+  class="w-screen h-screen flex flex-col bg-black text-neutral-200 overflow-hidden font-sans select-none border-none relative"
+  style={isMobileAndroid ? 'padding-top: max(env(safe-area-inset-top, 36px), 36px);' : ''}
+>
   <!-- Custom Monochromatic Window Titlebar (No bottom border, pure black) -->
   <TopBar {currentTab} />
 
@@ -90,7 +101,7 @@
         <PlaylistsView />
       {:else if currentTab === 'settings'}
         <SettingsView />
-      {:else if currentTab === 'now_playing'}
+      {:else if currentTab === 'now_playing' && !isMobileAndroid}
         <NowPlayingView onClose={toggleNowPlaying} />
       {/if}
     </main>
@@ -101,4 +112,15 @@
     {currentTab}
     onToggleNowPlaying={toggleNowPlaying}
   />
+
+  {#if isMobileAndroid}
+    <!-- Full-Screen Animated Bigger Player on Android -->
+    <div
+      class="fixed inset-0 z-50 bg-black transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] {currentTab === 'now_playing' ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'}"
+    >
+      <NowPlayingView onClose={toggleNowPlaying} />
+    </div>
+  {/if}
+
+  <JamModal />
 </div>

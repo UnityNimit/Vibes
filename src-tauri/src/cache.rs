@@ -1,14 +1,30 @@
 use crate::models::{CacheItem, CacheStats, Song};
 use std::fs;
 use std::path::PathBuf;
-use std::process::Command;
+use std::sync::OnceLock;
 
-#[cfg(target_os = "windows")]
-use std::os::windows::process::CommandExt;
+static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-const CREATE_NO_WINDOW: u32 = 0x08000000;
+pub fn init_app_dir(dir: PathBuf) {
+    let _ = fs::create_dir_all(&dir);
+    let _ = APP_DATA_DIR.set(dir);
+}
 
 pub fn get_app_dir() -> PathBuf {
+    if let Some(dir) = APP_DATA_DIR.get() {
+        return dir.clone();
+    }
+
+    #[cfg(target_os = "android")]
+    {
+        for candidate in ["/data/user/0/com.vibes.music/files", "/data/data/com.vibes.music/files"] {
+            let p = PathBuf::from(candidate);
+            if p.exists() || fs::create_dir_all(&p).is_ok() {
+                return p;
+            }
+        }
+    }
+
     let mut base = dirs::data_dir().unwrap_or_else(|| PathBuf::from("."));
     base.push("Vibes");
     let _ = fs::create_dir_all(&base);
@@ -45,60 +61,11 @@ pub fn save_song_metadata(song: &Song) -> Result<(), String> {
     Ok(())
 }
 
-pub async fn auto_cache_song(song: Song) {
-    let video_id = song.id.clone();
-    let cache_dir = get_cache_dir();
-    let audio_path = cache_dir.join(format!("{}.m4a", video_id));
-
-    // If already fully cached, skip download
-    if audio_path.exists() {
-        if let Ok(meta) = fs::metadata(&audio_path) {
-            if meta.len() > 300_000 {
-                let _ = save_song_metadata(&song);
-                return;
-            }
-        }
-    }
-
-    tokio::task::spawn_blocking(move || {
-        let output_template = cache_dir.join(format!("{}.%(ext)s", video_id));
-        let output_str = output_template.to_string_lossy().to_string();
-        let yt_url = format!("https://www.youtube.com/watch?v={}", video_id);
-
-        let mut cmd = Command::new("yt-dlp");
-        cmd.env("PYTHONHTTPSVERIFY", "0");
-        cmd.args([
-            "-f", "ba[ext=m4a]/ba",
-            "-o", &output_str,
-            "--no-playlist",
-            "--quiet",
-            "--no-warnings",
-            &yt_url,
-        ]);
-
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(CREATE_NO_WINDOW);
-
-        match cmd.status() {
-            Ok(status) => {
-                if status.success() {
-                    let _ = save_song_metadata(&song);
-                    println!("[Cache Saved] Downloaded: {} ({})", song.title, video_id);
-                } else {
-                    eprintln!("[Cache Error] yt-dlp failed for {}", video_id);
-                }
-            }
-            Err(e) => {
-                eprintln!("[Cache Error] Failed to run yt-dlp: {}", e);
-            }
-        }
-    });
-}
-
 pub async fn download_song_async(song: Song) -> Result<(), String> {
     let video_id = song.id.clone();
     let cache_dir = get_cache_dir();
     let audio_path = cache_dir.join(format!("{}.m4a", video_id));
+    let temp_path = cache_dir.join(format!("{}.m4a.tmp", video_id));
 
     if audio_path.exists() {
         if let Ok(meta) = fs::metadata(&audio_path) {
@@ -109,35 +76,57 @@ pub async fn download_song_async(song: Song) -> Result<(), String> {
         }
     }
 
-    tokio::task::spawn_blocking(move || {
-        let output_template = cache_dir.join(format!("{}.%(ext)s", video_id));
-        let output_str = output_template.to_string_lossy().to_string();
-        let yt_url = format!("https://www.youtube.com/watch?v={}", video_id);
+    // 1. Resolve direct audio stream URL
+    let stream_url = crate::youtube::resolve_stream_url(&video_id).await?;
 
-        let mut cmd = Command::new("yt-dlp");
-        cmd.env("PYTHONHTTPSVERIFY", "0");
-        cmd.args([
-            "-f", "ba[ext=m4a]/ba",
-            "-o", &output_str,
-            "--no-playlist",
-            "--quiet",
-            "--no-warnings",
-            &yt_url,
-        ]);
+    // 2. Download audio bytes via reqwest with robust timeout
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(90))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
 
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(CREATE_NO_WINDOW);
+    let resp = client
+        .get(&stream_url)
+        .header(
+            reqwest::header::USER_AGENT,
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        )
+        .send()
+        .await
+        .map_err(|e| format!("Download network error: {}", e))?;
 
-        let status = cmd.status().map_err(|e| format!("Failed to run yt-dlp: {}", e))?;
-        if status.success() {
-            let _ = save_song_metadata(&song);
-            Ok(())
-        } else {
-            Err("yt-dlp exited with error".to_string())
-        }
-    })
-    .await
-    .map_err(|e| format!("Task join error: {}", e))?
+    if !resp.status().is_success() {
+        return Err(format!("Download stream HTTP error: {}", resp.status()));
+    }
+
+    let bytes = resp
+        .bytes()
+        .await
+        .map_err(|e| format!("Failed reading audio bytes: {}", e))?;
+
+    if bytes.len() < 50_000 {
+        return Err("Downloaded audio file too small".to_string());
+    }
+
+    // Write to .tmp first to guarantee atomic write
+    if let Err(e) = fs::write(&temp_path, &bytes) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(format!("Failed writing cache file: {}", e));
+    }
+
+    // Rename temp file to actual file
+    if let Err(e) = fs::rename(&temp_path, &audio_path) {
+        let _ = fs::remove_file(&temp_path);
+        return Err(format!("Failed finalizing cache file: {}", e));
+    }
+
+    save_song_metadata(&song)?;
+    println!("[Cache Saved] Downloaded: {} ({})", song.title, video_id);
+    Ok(())
+}
+
+pub async fn auto_cache_song(song: Song) -> Result<(), String> {
+    download_song_async(song).await
 }
 
 pub fn get_cached_songs() -> Result<Vec<CacheItem>, String> {
@@ -186,9 +175,11 @@ pub fn get_cached_songs() -> Result<Vec<CacheItem>, String> {
 pub fn delete_cache_item(video_id: &str) -> Result<(), String> {
     let cache_dir = get_cache_dir();
     let audio_path = cache_dir.join(format!("{}.m4a", video_id));
+    let temp_path = cache_dir.join(format!("{}.m4a.tmp", video_id));
     let meta_path = cache_dir.join(format!("{}.json", video_id));
 
     let _ = fs::remove_file(audio_path);
+    let _ = fs::remove_file(temp_path);
     let _ = fs::remove_file(meta_path);
     Ok(())
 }

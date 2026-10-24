@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { isAndroid } from '$lib/platform';
   import Logo from './Logo.svelte';
 
   interface Props {
@@ -10,6 +11,7 @@
   let { currentTab = 'search' }: Props = $props();
 
   let isMaximized = $state(false);
+  let isMobileAndroid = $state(false);
 
   const TAB_TITLES: Record<string, string> = {
     search: 'Search',
@@ -31,7 +33,10 @@
   }
 
   onMount(() => {
-    checkMaximized();
+    isMobileAndroid = isAndroid();
+    if (!isMobileAndroid) {
+      checkMaximized();
+    }
   });
 
   async function handleMouseDown(e: MouseEvent) {
@@ -90,9 +95,10 @@
     </h1>
   </div>
 
-  <!-- Middle: Drag area spacer (padded on right for absolute window buttons) -->
-  <div data-tauri-drag-region class="flex-1 h-full cursor-default pr-36"></div>
+  <!-- Middle: Drag area spacer (padded on right for absolute window buttons on desktop) -->
+  <div data-tauri-drag-region class="flex-1 h-full cursor-default {isMobileAndroid ? '' : 'pr-36'}"></div>
 
+  {#if !isMobileAndroid}
   <!-- Right: Window Controls (Pinned flush to top-right corner, ZERO margin from top) -->
   <div class="absolute top-0 right-0 flex items-center h-10 sm:h-11 flex-shrink-0 z-20" data-tauri-drag-region="false">
     <!-- Minimize -->
@@ -148,4 +154,5 @@
       </svg>
     </button>
   </div>
+  {/if}
 </header>

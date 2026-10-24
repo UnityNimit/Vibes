@@ -72,7 +72,7 @@ async fn get_stream(song: Song, auto_save: Option<bool>) -> Result<StreamResult,
     if auto_save.unwrap_or(false) {
         let song_clone = song.clone();
         tokio::spawn(async move {
-            auto_cache_song(song_clone).await;
+            let _ = auto_cache_song(song_clone).await;
         });
     }
 
@@ -89,17 +89,22 @@ async fn prefetch_stream(song: Song) -> Result<StreamResult, String> {
 }
 
 #[tauri::command]
-async fn trigger_auto_cache(song: Song) -> Result<(), String> {
+async fn trigger_auto_cache(app: tauri::AppHandle, song: Song) -> Result<(), String> {
     let song_clone = song.clone();
     tokio::spawn(async move {
-        auto_cache_song(song_clone).await;
+        if let Ok(_) = auto_cache_song(song_clone.clone()).await {
+            use tauri::Emitter;
+            let _ = app.emit("cache-updated", song_clone.id);
+        }
     });
     Ok(())
 }
 
 #[tauri::command]
-async fn download_song(song: Song) -> Result<bool, String> {
-    download_song_async(song).await?;
+async fn download_song(app: tauri::AppHandle, song: Song) -> Result<bool, String> {
+    download_song_async(song.clone()).await?;
+    use tauri::Emitter;
+    let _ = app.emit("cache-updated", song.id);
     Ok(true)
 }
 
@@ -109,20 +114,26 @@ fn get_all_cached() -> Result<Vec<CacheItem>, String> {
 }
 
 #[tauri::command]
-fn delete_cache(id: String) -> Result<(), String> {
-    delete_cache_item(&id)
+fn delete_cache(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    delete_cache_item(&id)?;
+    use tauri::Emitter;
+    let _ = app.emit("cache-updated", id);
+    Ok(())
 }
 
 #[tauri::command]
-fn clear_cache() -> Result<(), String> {
-    clear_all_cache_files()
+fn clear_cache(app: tauri::AppHandle) -> Result<(), String> {
+    clear_all_cache_files()?;
+    use tauri::Emitter;
+    let _ = app.emit("cache-updated", "");
+    Ok(())
 }
 
 #[tauri::command]
 fn open_cache_dir() -> Result<(), String> {
-    let dir = get_cache_dir();
     #[cfg(target_os = "windows")]
     {
+        let dir = get_cache_dir();
         use std::process::Command;
         let mut cmd = Command::new("explorer");
         cmd.arg(&dir);
@@ -188,28 +199,36 @@ async fn get_song_lyrics(title: String, artist: String, duration_secs: Option<u6
 }
 
 #[tauri::command]
-fn minimize_window(window: tauri::Window) {
+fn minimize_window(#[allow(unused_variables)] window: tauri::Window) {
+    #[cfg(desktop)]
     let _ = window.minimize();
 }
 
 #[tauri::command]
-fn toggle_maximize_window(window: tauri::Window) -> bool {
-    if let Ok(is_max) = window.is_maximized() {
-        if is_max {
-            let _ = window.unmaximize();
-            false
-        } else {
-            let _ = window.maximize();
-            true
+fn toggle_maximize_window(#[allow(unused_variables)] window: tauri::Window) -> bool {
+    #[cfg(desktop)]
+    {
+        if let Ok(is_max) = window.is_maximized() {
+            if is_max {
+                let _ = window.unmaximize();
+                return false;
+            } else {
+                let _ = window.maximize();
+                return true;
+            }
         }
-    } else {
-        false
     }
+    false
 }
 
 #[tauri::command]
-fn is_window_maximized(window: tauri::Window) -> bool {
-    window.is_maximized().unwrap_or(false)
+fn is_window_maximized(#[allow(unused_variables)] window: tauri::Window) -> bool {
+    #[cfg(desktop)]
+    {
+        return window.is_maximized().unwrap_or(false);
+    }
+    #[cfg(not(desktop))]
+    false
 }
 
 #[tauri::command]
@@ -218,7 +237,8 @@ fn close_window(window: tauri::Window) {
 }
 
 #[tauri::command]
-fn start_drag(window: tauri::Window) {
+fn start_drag(#[allow(unused_variables)] window: tauri::Window) {
+    #[cfg(desktop)]
     let _ = window.start_dragging();
 }
 
@@ -227,6 +247,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            if let Ok(dir) = app.path().app_data_dir() {
+                cache::init_app_dir(dir);
+            }
+
+            #[cfg(desktop)]
             if let Some(icon) = app.default_window_icon() {
                 for (_label, window) in app.webview_windows() {
                     let _ = window.set_icon(icon.clone());

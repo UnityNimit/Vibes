@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { isAndroid } from '../platform';
   import { player } from '../player.svelte';
   import { playlistStore } from '../playlistStore.svelte';
   import { jamStore } from '../jamStore.svelte';
@@ -6,7 +8,6 @@
   import WaveProgressBar from './WaveProgressBar.svelte';
   import TrackImage from './TrackImage.svelte';
   import RepeatIcon from './RepeatIcon.svelte';
-  import ShuffleIcon from './ShuffleIcon.svelte';
 
   interface Props {
     currentTab?: 'search' | 'liked' | 'saved' | 'playlists' | 'settings' | 'now_playing';
@@ -14,6 +15,48 @@
   }
 
   let { currentTab, onToggleNowPlaying }: Props = $props();
+
+  let isMobileAndroid = $state(isAndroid());
+
+  onMount(() => {
+    isMobileAndroid = isAndroid();
+  });
+
+  let mobileProgressEl = $state<HTMLDivElement | null>(null);
+  let isDraggingProgress = $state(false);
+
+  let progressPercent = $derived(
+    player.duration > 0 ? Math.min(100, Math.max(0, (player.currentTime / player.duration) * 100)) : 0
+  );
+
+  function seekToProgressEvent(clientX: number) {
+    if (!mobileProgressEl || !player.duration) return;
+    const rect = mobileProgressEl.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    player.seek(ratio * player.duration);
+  }
+
+  function handleProgressPointerDown(e: PointerEvent) {
+    isDraggingProgress = true;
+    seekToProgressEvent(e.clientX);
+
+    const onPointerMove = (ev: PointerEvent) => {
+      if (isDraggingProgress) {
+        seekToProgressEvent(ev.clientX);
+      }
+    };
+
+    const onPointerUp = () => {
+      isDraggingProgress = false;
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerUp);
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerUp);
+  }
 
   let showPlaylistMenu = $state(false);
   let showCreateInput = $state(false);
@@ -146,8 +189,151 @@
   <div
     class="fixed bottom-0 left-0 right-0 z-40 h-20 bg-black/95 backdrop-blur-2xl px-4 sm:px-6 flex items-center justify-between select-none shadow-2xl transition-all duration-300 font-sans overflow-visible"
   >
-    <!-- Left Section: Track Artwork & Info (Expanded width for song name) -->
-    <div class="flex items-center gap-4 min-w-0 w-72 sm:w-80 md:w-96 flex-shrink-0">
+    {#if isMobileAndroid}
+      <!-- Top Edge Progress Bar for Android (Starts at 84px to avoid the poked-out vinyl disc) -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        bind:this={mobileProgressEl}
+        onpointerdown={handleProgressPointerDown}
+        class="absolute top-0 right-0 h-4 -translate-y-2 flex items-center cursor-pointer group z-30 select-none"
+        style="left: 84px;"
+      >
+        <!-- Background Track -->
+        <div class="w-full h-[2.5px] bg-white/15 rounded-full overflow-hidden relative">
+          <!-- Progress Fill -->
+          <div
+            class="h-full bg-accent rounded-full transition-all duration-75"
+            style="width: {progressPercent}%;"
+          ></div>
+        </div>
+      </div>
+
+      <!-- Android Mobile Bottom Player Layout -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        onclick={onToggleNowPlaying}
+        class="flex items-center justify-between w-full h-full relative cursor-pointer"
+      >
+        <!-- Left: Vinyl Disc + Title + Artist (flexible width) -->
+        <div class="flex items-center gap-3 min-w-0 flex-1 pr-3">
+          <!-- Floating Borderless Vinyl/CD Artwork Poking Out of the Bottom Player Bar -->
+          <div
+            class="relative w-16 h-16 -translate-y-3 rounded-full flex items-center justify-center flex-shrink-0 shadow-[0_8px_24px_rgba(0,0,0,0.85)] hover:scale-105 transition-transform duration-200"
+            aria-label="Open Now Playing"
+          >
+            <!-- The Spinning Circular Disc -->
+            <div class="relative w-full h-full rounded-full overflow-hidden cd-disc {player.isPlaying ? '' : 'cd-paused'} border border-white/20">
+              <TrackImage
+                src={player.currentSong.thumb}
+                songId={player.currentSong.id}
+                alt={player.currentSong.title}
+                class="w-full h-full object-cover select-none pointer-events-none"
+                iconClass="w-6 h-6 text-neutral-500"
+                highQuality={true}
+              />
+
+              <!-- Iridescent Vinyl/CD Grooves & Radial Reflection -->
+              <div class="absolute inset-0 rounded-full bg-gradient-to-tr from-white/15 via-transparent to-white/20 pointer-events-none"></div>
+
+              <!-- Concentric Vinyl Groove Rings -->
+              <div class="absolute inset-2 rounded-full border border-white/10 pointer-events-none"></div>
+              <div class="absolute inset-4 rounded-full border border-white/[0.07] pointer-events-none"></div>
+
+              <!-- Center Spindle Hole / Ring of the CD -->
+              <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div class="w-4 h-4 rounded-full bg-black/95 border border-white/40 flex items-center justify-center shadow-lg">
+                  <div class="w-1.5 h-1.5 rounded-full bg-neutral-200 shadow-sm"></div>
+                </div>
+              </div>
+            </div>
+
+            {#if player.isLoading}
+              <div class="absolute inset-0 bg-black/70 rounded-full flex items-center justify-center z-10">
+                <div class="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            {/if}
+          </div>
+
+          <!-- Title & Artist -->
+          <div class="flex flex-col min-w-0 flex-1 overflow-hidden">
+            <div class="flex items-center min-w-0">
+              <div
+                bind:this={titleContainerEl}
+                class="flex-1 min-w-0 overflow-hidden relative"
+                style={isTitleOverflowing ? 'mask-image: linear-gradient(to right, black calc(100% - 16px), transparent 100%); -webkit-mask-image: linear-gradient(to right, black calc(100% - 16px), transparent 100%);' : ''}
+              >
+                {#if isTitleOverflowing}
+                  <div
+                    class="inline-flex marquee-track will-change-transform cursor-pointer"
+                    style="animation-duration: {marqueeDuration}s;"
+                  >
+                    <span class="pr-8 whitespace-nowrap text-sm font-medium text-white">{getCleanTitle(player.currentSong)}</span>
+                    <span class="pr-8 whitespace-nowrap text-sm font-medium text-white" aria-hidden="true">{getCleanTitle(player.currentSong)}</span>
+                  </div>
+                {:else}
+                  <p class="text-sm font-medium text-white truncate text-left block w-full">
+                    {getCleanTitle(player.currentSong)}
+                  </p>
+                {/if}
+              </div>
+            </div>
+            <div class="flex items-center gap-2 mt-0.5 min-w-0">
+              <p class="text-xs text-neutral-400 font-normal truncate">
+                {getCleanArtist(player.currentSong)}
+              </p>
+              {#if jamStore.status === 'connected'}
+                <button
+                  type="button"
+                  onclick={(e) => { e.stopPropagation(); jamStore.open(); }}
+                  class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/20 flex-shrink-0 cursor-pointer"
+                >
+                  JAM ({jamStore.peerCount})
+                </button>
+              {/if}
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Play/Pause & Next Song Only -->
+        <!-- svelte-ignore a11y_click_events_have_key_events -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
+        <div class="flex items-center gap-2.5 flex-shrink-0" onclick={(e) => e.stopPropagation()}>
+          <!-- Play / Pause -->
+          <button
+            onclick={(e) => { e.stopPropagation(); player.togglePlay(); }}
+            class="relative w-11 h-11 rounded-full bg-accent text-accent-contrast flex items-center justify-center hover:opacity-90 active:scale-95 transition-all duration-150 cursor-pointer shadow-md overflow-hidden flex-shrink-0"
+            aria-label={player.isPlaying ? 'Pause' : 'Play'}
+          >
+            {#if player.isLoading}
+              <div class="w-5 h-5 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+            {:else if player.isPlaying}
+              <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+                <path d="M8 6a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-3 0v-9A1.5 1.5 0 0 1 8 6zm8 0a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-3 0v-9A1.5 1.5 0 0 1 16 6z"/>
+              </svg>
+            {:else}
+              <svg class="w-5 h-5 fill-current ml-0.5" viewBox="0 0 24 24">
+                <path d="M8.5 5.5a1.5 1.5 0 0 0-2.25 1.3v10.4a1.5 1.5 0 0 0 2.25 1.3l9-5.2a1.5 1.5 0 0 0 0-2.6l-9-5.2z"/>
+              </svg>
+            {/if}
+          </button>
+
+          <!-- Next -->
+          <button
+            onclick={(e) => { e.stopPropagation(); player.next(); }}
+            class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-300 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150 cursor-pointer flex-shrink-0"
+            aria-label="Next track"
+          >
+            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
+              <path d="M17 6a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1zm-11.3 1.3a1 1 0 0 1 1.6-.8l7 5a1 1 0 0 1 0 1.6l-7 5a1 1 0 0 1-1.6-.8v-10z"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    {:else}
+      <!-- Left Section: Track Artwork & Info (Expanded width for song name) -->
+      <div class="flex items-center gap-4 min-w-0 w-72 sm:w-80 md:w-96 flex-shrink-0">
       <!-- Floating Borderless Vinyl/CD Artwork Poking Out of the Bottom Player Bar -->
       <button
         onclick={onToggleNowPlaying}
@@ -231,9 +417,14 @@
             {getCleanArtist(player.currentSong)}
           </p>
           {#if jamStore.status === 'connected'}
-            <span class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/20 flex-shrink-0">
+            <button
+              type="button"
+              onclick={() => jamStore.open()}
+              class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/15 hover:bg-accent/25 text-accent border border-accent/20 flex-shrink-0 cursor-pointer transition-colors"
+              title="Manage Jam Session"
+            >
               JAM ({jamStore.peerCount})
-            </span>
+            </button>
           {/if}
         </div>
       </div>
@@ -243,14 +434,16 @@
     <div class="flex-1 max-w-2xl px-4 flex flex-col items-center gap-1">
       <!-- Controls Row (Unified, Ergonomic Button Spacing & Sizing) -->
       <div class="flex items-center gap-2 sm:gap-3">
-        <!-- Shuffle (Custom Morphing Icon: Straightline Arrow -> Crisscross Arrows -> Straightline) -->
+        <!-- Like / Heart Button (Placed where shuffle used to be) -->
         <button
-          onclick={() => player.toggleShuffle()}
-          class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150 cursor-pointer {player.isShuffle ? 'text-accent' : ''}"
-          title={player.isShuffle ? 'Disable Shuffle' : 'Enable Shuffle'}
-          aria-label="Toggle shuffle"
+          onclick={() => player.toggleLike()}
+          class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150 cursor-pointer {player.isLiked ? 'text-accent' : ''}"
+          title={player.isLiked ? 'Unlike' : 'Like'}
+          aria-label={player.isLiked ? 'Unlike' : 'Like'}
         >
-          <ShuffleIcon active={player.isShuffle} size={20} />
+          <svg class="w-5 h-5 {player.isLiked ? 'fill-current' : 'fill-none'}" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+          </svg>
         </button>
 
         <!-- Prev -->
@@ -297,12 +490,12 @@
           </svg>
         </button>
 
-        <!-- Repeat (Custom Morphing Icon: Line -> Circle -> 8 Loop -> Line) -->
+        <!-- Repeat / Shuffle (Custom Morphing Icon: Line -> Circle -> 8 Loop Shuffle -> Line) -->
         <button
           onclick={() => player.toggleRepeat()}
           class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150 cursor-pointer {player.repeatMode !== 'off' ? 'text-accent' : ''}"
-          title={player.repeatMode === 'one' ? 'Repeat One (Click for All)' : player.repeatMode === 'all' ? 'Repeat All (Click for Off)' : 'Repeat Off (Click for One)'}
-          aria-label="Toggle repeat mode"
+          title={player.repeatMode === 'one' ? 'Repeat One (Click for Shuffle)' : player.repeatMode === 'shuffle' ? 'Shuffle (Click for Off)' : 'Sequential (Click for Repeat One)'}
+          aria-label="Toggle repeat or shuffle mode"
         >
           <RepeatIcon mode={player.repeatMode} size={20} />
         </button>
@@ -433,16 +626,7 @@
         {/if}
       </button>
 
-      <!-- Like Action (Positioned just to the left of volume controls) -->
-      <button
-        onclick={() => player.toggleLike()}
-        class="p-1.5 transition-colors cursor-pointer flex-shrink-0 {player.isLiked ? 'text-accent' : 'text-neutral-500 hover:text-white'}"
-        title={player.isLiked ? 'Unlike' : 'Like'}
-      >
-        <svg class="w-4 h-4 {player.isLiked ? 'fill-current' : 'fill-none'}" viewBox="0 0 24 24" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-        </svg>
-      </button>
+
 
       <!-- Mute Toggle -->
       <button onclick={() => player.toggleMute()} class="hover:text-white transition-colors cursor-pointer" title="Mute">
@@ -471,6 +655,7 @@
         title="Volume"
       />
     </div>
+    {/if}
   </div>
 {/if}
 

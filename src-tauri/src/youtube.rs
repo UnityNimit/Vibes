@@ -9,6 +9,15 @@ use std::time::{Duration, Instant};
 static STREAM_CACHE: LazyLock<RwLock<HashMap<String, (String, Instant)>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+struct VisitorSession {
+    visitor_id: String,
+    cookies: String,
+    timestamp: Instant,
+}
+
+static VISITOR_SESSION: LazyLock<RwLock<Option<VisitorSession>>> =
+    LazyLock::new(|| RwLock::new(None));
+
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
@@ -475,6 +484,221 @@ fn extract_suggestions(val: &Value, out: &mut Vec<String>) {
     }
 }
 
+async fn get_or_refresh_visitor_session(client: &reqwest::Client, force_refresh: bool) -> Result<(String, String), String> {
+    if !force_refresh {
+        if let Ok(guard) = VISITOR_SESSION.read() {
+            if let Some(session) = guard.as_ref() {
+                if session.timestamp.elapsed() < Duration::from_secs(3 * 3600) {
+                    return Ok((session.visitor_id.clone(), session.cookies.clone()));
+                }
+            }
+        }
+    }
+
+    let resp = client
+        .get("https://www.youtube.com/")
+        .header(
+            USER_AGENT,
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        )
+        .header("Accept-Language", "en-US,en;q=0.9")
+        .send()
+        .await
+        .map_err(|e| format!("Failed to connect to YouTube: {}", e))?;
+
+    let mut cookie_parts = Vec::new();
+    for val in resp.headers().get_all(reqwest::header::SET_COOKIE) {
+        if let Ok(s) = val.to_str() {
+            if let Some(part) = s.split(';').next() {
+                let trimmed = part.trim();
+                if trimmed.contains('=') {
+                    cookie_parts.push(trimmed.to_string());
+                }
+            }
+        }
+    }
+    let cookies_str = cookie_parts.join("; ");
+
+    let html = resp
+        .text()
+        .await
+        .map_err(|e| format!("Failed to read YouTube response: {}", e))?;
+
+    let visitor_id = if let Some(pos) = html.find("\"VISITOR_DATA\":") {
+        let rest = &html[pos + 15..];
+        let rest_trimmed = rest.trim_start();
+        if rest_trimmed.starts_with('"') {
+            let after_quote = &rest_trimmed[1..];
+            if let Some(end_quote) = after_quote.find('"') {
+                after_quote[..end_quote].to_string()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
+    if visitor_id.is_empty() {
+        return Err("Could not extract visitor token from YouTube".to_string());
+    }
+
+    let session = VisitorSession {
+        visitor_id: visitor_id.clone(),
+        cookies: cookies_str.clone(),
+        timestamp: Instant::now(),
+    };
+
+    if let Ok(mut guard) = VISITOR_SESSION.write() {
+        *guard = Some(session);
+    }
+
+    Ok((visitor_id, cookies_str))
+}
+
+async fn resolve_stream_url_innertube(video_id: &str) -> Result<String, String> {
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new());
+
+    for attempt in 0..2 {
+        let force_refresh = attempt > 0;
+        let (visitor_id, cookies_str) = match get_or_refresh_visitor_session(&client, force_refresh).await {
+            Ok(v) => v,
+            Err(e) => {
+                if attempt == 0 {
+                    continue;
+                }
+                return Err(e);
+            }
+        };
+
+        let payload = json!({
+            "context": {
+                "client": {
+                    "clientName": "VISIONOS",
+                    "clientVersion": "1.02",
+                    "deviceMake": "Apple",
+                    "deviceModel": "RealityDevice17,1",
+                    "osName": "visionOS",
+                    "osVersion": "26.5.23O471",
+                    "hl": "en",
+                    "timeZone": "UTC",
+                    "utcOffsetMinutes": 0
+                }
+            },
+            "videoId": video_id,
+            "playbackContext": {
+                "contentPlaybackContext": {
+                    "html5Preference": "HTML5_PREF_WANTS"
+                }
+            },
+            "contentCheckOk": true,
+            "racyCheckOk": true
+        });
+
+        let mut headers = HeaderMap::new();
+        headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+        headers.insert("X-Youtube-Client-Name", HeaderValue::from_static("101"));
+        headers.insert("X-Youtube-Client-Version", HeaderValue::from_static("1.02"));
+        headers.insert("Origin", HeaderValue::from_static("https://www.youtube.com"));
+        headers.insert(
+            USER_AGENT,
+            HeaderValue::from_static(
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15",
+            ),
+        );
+        if let Ok(v_header) = HeaderValue::from_str(&visitor_id) {
+            headers.insert("X-Goog-Visitor-Id", v_header);
+        }
+        if !cookies_str.is_empty() {
+            if let Ok(c_header) = HeaderValue::from_str(&cookies_str) {
+                headers.insert("Cookie", c_header);
+            }
+        }
+
+        let resp = match client
+            .post("https://www.youtube.com/youtubei/v1/player?prettyPrint=false")
+            .headers(headers)
+            .json(&payload)
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                if attempt == 0 {
+                    continue;
+                }
+                return Err(format!("Player request failed: {}", e));
+            }
+        };
+
+        let data: Value = match resp.json().await {
+            Ok(d) => d,
+            Err(e) => {
+                if attempt == 0 {
+                    continue;
+                }
+                return Err(format!("Failed to parse player JSON: {}", e));
+            }
+        };
+
+        let status = data
+            .pointer("/playabilityStatus/status")
+            .and_then(|s| s.as_str())
+            .unwrap_or("");
+
+        if status != "OK" {
+            if attempt == 0 {
+                continue;
+            }
+            let reason = data
+                .pointer("/playabilityStatus/reason")
+                .and_then(|r| r.as_str())
+                .unwrap_or(status);
+            return Err(format!("Video not playable: {}", reason));
+        }
+
+        let adaptive_formats = data
+            .pointer("/streamingData/adaptiveFormats")
+            .and_then(|f| f.as_array());
+
+        if let Some(formats) = adaptive_formats {
+            let mut audio_streams: Vec<(&Value, i64)> = formats
+                .iter()
+                .filter(|f| {
+                    let mime = f.get("mimeType").and_then(|m| m.as_str()).unwrap_or("");
+                    let has_url = f.get("url").and_then(|u| u.as_str()).is_some();
+                    mime.starts_with("audio/") && has_url
+                })
+                .map(|f| {
+                    let bitrate = f.get("bitrate").and_then(|b| b.as_i64()).unwrap_or(0);
+                    let mime = f.get("mimeType").and_then(|m| m.as_str()).unwrap_or("");
+                    let bonus = if mime.contains("mp4a") || mime.contains("audio/mp4") {
+                        50_000
+                    } else {
+                        0
+                    };
+                    (f, bitrate + bonus)
+                })
+                .collect();
+
+            audio_streams.sort_by(|a, b| b.1.cmp(&a.1));
+
+            if let Some((best, _)) = audio_streams.first() {
+                if let Some(url) = best.get("url").and_then(|u| u.as_str()) {
+                    return Ok(url.to_string());
+                }
+            }
+        }
+    }
+
+    Err("No direct audio streams returned".to_string())
+}
+
 pub async fn resolve_stream_url(video_id: &str) -> Result<String, String> {
     // 1. Check ultra-fast in-memory stream cache
     if let Ok(cache) = STREAM_CACHE.read() {
@@ -485,45 +709,62 @@ pub async fn resolve_stream_url(video_id: &str) -> Result<String, String> {
         }
     }
 
-    let video_id_owned = video_id.to_string();
-    let url = format!("https://www.youtube.com/watch?v={}", video_id_owned);
-
-    let stream_url = tokio::task::spawn_blocking(move || {
-        let mut cmd = Command::new("yt-dlp");
-        cmd.env("PYTHONHTTPSVERIFY", "0");
-        cmd.args(["--no-playlist", "--no-warnings", "-f", "ba[ext=m4a]/ba", "-g", &url]);
-
-        #[cfg(target_os = "windows")]
-        cmd.creation_flags(CREATE_NO_WINDOW);
-
-        let output = cmd
-            .output()
-            .map_err(|e| format!("Failed to execute stream resolver: {}", e))?;
-
-        if !output.status.success() {
-            let err = String::from_utf8_lossy(&output.stderr);
-            return Err(format!("Stream extractor error: {}", err));
+    // 2. Try native ultra-fast InnerTube stream extractor first (works everywhere, zero external dependencies)
+    match resolve_stream_url_innertube(video_id).await {
+        Ok(stream_url) => {
+            if let Ok(mut cache) = STREAM_CACHE.write() {
+                cache.insert(video_id.to_string(), (stream_url.clone(), Instant::now()));
+            }
+            return Ok(stream_url);
         }
-
-        let stdout = String::from_utf8_lossy(&output.stdout);
-        let stream_url = stdout
-            .lines()
-            .find(|line| line.starts_with("http"))
-            .ok_or_else(|| "No valid audio stream URL returned".to_string())?
-            .trim()
-            .to_string();
-
-        Ok(stream_url)
-    })
-    .await
-    .map_err(|e| format!("Task join error: {}", e))??;
-
-    // 2. Store in in-memory cache for 0ms subsequent access
-    if let Ok(mut cache) = STREAM_CACHE.write() {
-        cache.insert(video_id.to_string(), (stream_url.clone(), Instant::now()));
+        Err(err) => {
+            eprintln!("[Native Stream Warning] {}. Falling back...", err);
+        }
     }
 
-    Ok(stream_url)
+    // 3. Desktop fallback: yt-dlp on Windows if available
+    #[cfg(target_os = "windows")]
+    {
+        let video_id_owned = video_id.to_string();
+        let url = format!("https://www.youtube.com/watch?v={}", video_id_owned);
+
+        let stream_url = tokio::task::spawn_blocking(move || {
+            let mut cmd = Command::new("yt-dlp");
+            cmd.env("PYTHONHTTPSVERIFY", "0");
+            cmd.args(["--no-playlist", "--no-warnings", "-f", "ba[ext=m4a]/ba", "-g", &url]);
+            cmd.creation_flags(CREATE_NO_WINDOW);
+
+            let output = cmd
+                .output()
+                .map_err(|e| format!("Failed to execute stream resolver: {}", e))?;
+
+            if !output.status.success() {
+                let err = String::from_utf8_lossy(&output.stderr);
+                return Err(format!("Stream extractor error: {}", err));
+            }
+
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let stream_url = stdout
+                .lines()
+                .find(|line| line.starts_with("http"))
+                .ok_or_else(|| "No valid audio stream URL returned".to_string())?
+                .trim()
+                .to_string();
+
+            Ok(stream_url)
+        })
+        .await
+        .map_err(|e| format!("Task join error: {}", e))??;
+
+        if let Ok(mut cache) = STREAM_CACHE.write() {
+            cache.insert(video_id.to_string(), (stream_url.clone(), Instant::now()));
+        }
+
+        return Ok(stream_url);
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    Err("Failed to resolve audio stream URL".to_string())
 }
 
 fn parse_playlist_panel_video(r: &Value, skip_id: Option<&str>) -> Option<Song> {

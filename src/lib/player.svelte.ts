@@ -1,5 +1,7 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { Song, StreamResult, LyricLine, PlaybackContext, PlaybackSourceType } from './types';
+import { parseDurationToSeconds } from './utils';
 import { settings } from './settings.svelte';
 import { savedStore } from './savedStore.svelte';
 import { likedStore } from './likedStore.svelte';
@@ -26,8 +28,11 @@ class PlayerState {
 
   queue = $state<Song[]>([]);
   queueIndex = $state<number>(-1);
-  isShuffle = $state<boolean>(false);
-  repeatMode = $state<'off' | 'all' | 'one'>('off');
+  repeatMode = $state<'off' | 'one' | 'shuffle'>('off');
+
+  get isShuffle(): boolean {
+    return this.repeatMode === 'shuffle';
+  }
 
   showLyrics = $state<boolean>(false);
   lyrics = $state<{ synced: string | null; plain: string | null }>({ synced: null, plain: null });
@@ -37,6 +42,18 @@ class PlayerState {
 
   audio: HTMLAudioElement | null = null;
   onPlaybackChange: ((type: 'play' | 'pause' | 'seek', payload: any) => void) | null = null;
+  jamDelegate: {
+    isGuest: () => boolean;
+    getClockOffset?: () => number;
+    getHardwareCalibration?: () => number;
+    onUserPlay?: (song: Song, context?: PlaybackContext) => boolean;
+    onUserToggle?: () => boolean;
+    onUserNext?: () => boolean;
+    onUserPrev?: () => boolean;
+    onUserSeek?: (pos: number) => boolean;
+    onUserAddQueue?: (song: Song) => boolean;
+    onHostQueueChanged?: (queue: Song[], index: number) => void;
+  } | null = null;
 
   // Ultra-fast in-memory stream cache & lookahead pre-fetcher
   private streamCache = new Map<string, { result: StreamResult; timestamp: number }>();
@@ -56,16 +73,24 @@ class PlayerState {
       }
 
       const savedRepeat = localStorage.getItem('vibes_repeat_mode');
-      if (savedRepeat === 'off' || savedRepeat === 'all' || savedRepeat === 'one') {
+      if (savedRepeat === 'off' || savedRepeat === 'one' || savedRepeat === 'shuffle') {
         this.repeatMode = savedRepeat;
-      }
-
-      const savedShuffle = localStorage.getItem('vibes_shuffle');
-      if (savedShuffle !== null) {
-        this.isShuffle = savedShuffle === 'true';
+      } else if (savedRepeat === 'all') {
+        this.repeatMode = 'shuffle';
+      } else {
+        const savedShuffle = localStorage.getItem('vibes_shuffle');
+        if (savedShuffle === 'true') {
+          this.repeatMode = 'shuffle';
+        }
       }
 
       this.initAudio();
+      this.initMediaBridge();
+      listen<string>('cache-updated', (event) => {
+        if (this.currentSong && event.payload === this.currentSong.id) {
+          this.isCached = true;
+        }
+      });
     }
   }
 
@@ -98,6 +123,7 @@ class PlayerState {
     this.audio.addEventListener('durationchange', () => {
       if (this.audio && !isNaN(this.audio.duration)) {
         this.duration = this.audio.duration;
+        this.syncMediaNotification('metadata');
       }
     });
 
@@ -107,6 +133,7 @@ class PlayerState {
       if (this.currentSong) {
         feedStore.recordPlay(this.currentSong);
       }
+      this.syncMediaNotification('state');
       // Predictive prefetch of next track in queue for instant 0ms transition
       if (this.queueIndex >= 0 && this.queueIndex + 1 < this.queue.length) {
         this.prefetchStream(this.queue[this.queueIndex + 1]);
@@ -115,6 +142,7 @@ class PlayerState {
 
     this.audio.addEventListener('pause', () => {
       this.isPlaying = false;
+      this.syncMediaNotification('state');
     });
 
     this.audio.addEventListener('waiting', () => {
@@ -130,7 +158,8 @@ class PlayerState {
     });
 
     this.audio.addEventListener('error', (e) => {
-      console.error('[Audio Error]', e);
+      const audioErr = this.audio?.error;
+      console.error('[Audio Error]', e, 'Code:', audioErr?.code, 'Message:', audioErr?.message);
       this.isLoading = false;
       this.isPlaying = false;
     });
@@ -197,8 +226,25 @@ class PlayerState {
     song: Song,
     context?: { type: PlaybackSourceType; title: string; playlistId?: string; songs?: Song[] },
     startIndex?: number,
-    fromSync = false
+    fromSync = false,
+    syncTargetHostTime?: number,
+    syncStartPosition?: number
   ) {
+    if (!fromSync && this.jamDelegate?.isGuest()) {
+      const intercepted = this.jamDelegate.onUserPlay?.(
+        song,
+        context
+          ? {
+              type: context.type,
+              title: context.title,
+              playlistId: context.playlistId,
+              songs: context.songs || [song],
+            }
+          : undefined
+      );
+      if (intercepted) return;
+    }
+
     if (!this.audio) this.initAudio();
     if (!this.audio) return;
 
@@ -218,6 +264,9 @@ class PlayerState {
         const foundIdx = this.queue.findIndex((s) => s.id === song.id);
         this.queueIndex = foundIdx !== -1 ? foundIdx : 0;
       }
+      if (!fromSync) {
+        this.jamDelegate?.onHostQueueChanged?.(this.queue, this.queueIndex);
+      }
     } else {
       // Retain current context & queue
       const existingIdx = this.queue.findIndex((s) => s.id === song.id);
@@ -230,16 +279,21 @@ class PlayerState {
           this.currentContext.songs.push(song);
         }
       }
+      if (!fromSync) {
+        this.jamDelegate?.onHostQueueChanged?.(this.queue, this.queueIndex);
+      }
     }
 
     // Check if clicked the same song
     if (this.currentSong?.id === song.id && this.audio.src) {
       this.audio.play();
       this.isPlaying = true;
+      this.syncMediaNotification('state');
       return;
     }
 
     this.currentSong = song;
+    this.syncMediaNotification('metadata');
     this.isLoading = true;
     this.autoCachedCurrent = false;
     this.currentTime = 0;
@@ -295,6 +349,16 @@ class PlayerState {
         this.audio.src = streamRes.url;
       }
 
+      if (fromSync && syncTargetHostTime !== undefined) {
+        const offset = this.jamDelegate?.getClockOffset?.() || 0;
+        const cal = this.jamDelegate?.getHardwareCalibration?.() || 0;
+        const hostNow = performance.now() + offset;
+        const elapsedSec = Math.max(0, (hostNow - syncTargetHostTime - cal) / 1000);
+        const targetPos = (syncStartPosition || 0) + elapsedSec;
+        this.audio.currentTime = targetPos;
+        this.currentTime = targetPos;
+      }
+
       await this.audio.play();
       this.isPlaying = true;
       if (!fromSync && this.onPlaybackChange && this.currentSong) {
@@ -326,6 +390,9 @@ class PlayerState {
   }
 
   togglePlay() {
+    if (this.jamDelegate?.isGuest()) {
+      if (this.jamDelegate.onUserToggle?.()) return;
+    }
     if (!this.audio || !this.currentSong) return;
     if (this.isPlaying) {
       this.audio.pause();
@@ -341,9 +408,13 @@ class PlayerState {
   }
 
   seek(seconds: number, fromSync = false) {
+    if (!fromSync && this.jamDelegate?.isGuest()) {
+      if (this.jamDelegate.onUserSeek?.(seconds)) return;
+    }
     if (!this.audio) return;
     this.audio.currentTime = seconds;
     this.currentTime = seconds;
+    this.syncMediaNotification('state');
     if (!fromSync && this.onPlaybackChange) {
       this.onPlaybackChange('seek', { position: seconds });
     }
@@ -401,7 +472,30 @@ class PlayerState {
     }
   }
 
+  addToQueue(song: Song) {
+    if (this.jamDelegate?.isGuest()) {
+      if (this.jamDelegate.onUserAddQueue?.(song)) return;
+    }
+    const exists = this.queue.some((s) => s.id === song.id);
+    if (!exists) {
+      this.queue.push(song);
+      if (this.queue.length === 1 && !this.currentSong) {
+        this.play(song);
+      } else {
+        this.jamDelegate?.onHostQueueChanged?.(this.queue, this.queueIndex);
+      }
+    }
+  }
+
+  setQueueFromSync(newQueue: Song[], newIndex: number) {
+    this.queue = newQueue;
+    this.queueIndex = newIndex;
+  }
+
   next() {
+    if (this.jamDelegate?.isGuest()) {
+      if (this.jamDelegate.onUserNext?.()) return;
+    }
     if (this.queue.length === 0) return;
     if (this.isShuffle) {
       if (this.queue.length === 1) {
@@ -416,26 +510,35 @@ class PlayerState {
       this.play(this.queue[nextIdx]);
     } else if (this.queueIndex < this.queue.length - 1) {
       this.play(this.queue[this.queueIndex + 1]);
-    } else if (this.repeatMode === 'all') {
-      this.play(this.queue[0]);
     }
   }
 
   prev() {
+    if (this.jamDelegate?.isGuest()) {
+      if (this.jamDelegate.onUserPrev?.()) return;
+    }
     if (this.currentTime > 3) {
       this.seek(0);
       return;
     }
-    if (this.queueIndex > 0) {
+    if (this.isShuffle && this.queue.length > 1) {
+      let prevIdx = Math.floor(Math.random() * this.queue.length);
+      if (prevIdx === this.queueIndex) {
+        prevIdx = (prevIdx + this.queue.length - 1) % this.queue.length;
+      }
+      this.play(this.queue[prevIdx]);
+    } else if (this.queueIndex > 0) {
       this.play(this.queue[this.queueIndex - 1]);
-    } else if (this.repeatMode === 'all') {
-      this.play(this.queue[this.queue.length - 1]);
     } else {
       this.seek(0);
     }
   }
 
   private handleSongEnd() {
+    if (this.jamDelegate?.isGuest()) {
+      // Guest lets Host orchestrate track progression
+      return;
+    }
     if (this.repeatMode === 'one') {
       this.seek(0);
       this.audio?.play();
@@ -446,17 +549,108 @@ class PlayerState {
 
   toggleRepeat() {
     if (this.repeatMode === 'off') this.repeatMode = 'one';
-    else if (this.repeatMode === 'one') this.repeatMode = 'all';
+    else if (this.repeatMode === 'one') this.repeatMode = 'shuffle';
     else this.repeatMode = 'off';
     if (typeof window !== 'undefined') {
       localStorage.setItem('vibes_repeat_mode', this.repeatMode);
+      localStorage.setItem('vibes_shuffle', String(this.repeatMode === 'shuffle'));
     }
   }
 
   toggleShuffle() {
-    this.isShuffle = !this.isShuffle;
+    this.repeatMode = this.repeatMode === 'shuffle' ? 'off' : 'shuffle';
     if (typeof window !== 'undefined') {
-      localStorage.setItem('vibes_shuffle', String(this.isShuffle));
+      localStorage.setItem('vibes_repeat_mode', this.repeatMode);
+      localStorage.setItem('vibes_shuffle', String(this.repeatMode === 'shuffle'));
+    }
+  }
+
+  private initMediaBridge() {
+    if (typeof window === 'undefined') return;
+
+    // Direct bridge for Native Android MediaSession and Notification controls
+    (window as any).__onAndroidMediaAction = (action: string, arg?: number) => {
+      if (action === 'play') {
+        if (!this.isPlaying) this.togglePlay();
+      } else if (action === 'pause') {
+        if (this.isPlaying) this.togglePlay();
+      } else if (action === 'toggle') {
+        this.togglePlay();
+      } else if (action === 'next') {
+        this.next();
+      } else if (action === 'prev') {
+        this.prev();
+      } else if (action === 'seek' && typeof arg === 'number') {
+        this.seek(arg);
+      }
+    };
+
+    // Standard web navigator.mediaSession (Supports Windows SMTC & desktop media hotkeys)
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.setActionHandler('play', () => {
+          if (!this.isPlaying) this.togglePlay();
+        });
+        navigator.mediaSession.setActionHandler('pause', () => {
+          if (this.isPlaying) this.togglePlay();
+        });
+        navigator.mediaSession.setActionHandler('previoustrack', () => {
+          this.prev();
+        });
+        navigator.mediaSession.setActionHandler('nexttrack', () => {
+          this.next();
+        });
+        navigator.mediaSession.setActionHandler('seekto', (details) => {
+          if (details.seekTime !== undefined) {
+            this.seek(details.seekTime);
+          }
+        });
+      } catch (e) {
+        console.warn('Navigator mediaSession registration error:', e);
+      }
+    }
+  }
+
+  syncMediaNotification(type: 'metadata' | 'state') {
+    if (typeof window === 'undefined') return;
+
+    let durationSec = this.duration || 0;
+    if (!durationSec && this.currentSong?.duration) {
+      durationSec = parseDurationToSeconds(this.currentSong.duration);
+    }
+
+    // 1. Sync standard navigator.mediaSession
+    if ('mediaSession' in navigator && this.currentSong) {
+      try {
+        if (type === 'metadata') {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title: this.currentSong.title,
+            artist: this.currentSong.artist,
+            artwork: this.currentSong.thumb
+              ? [{ src: this.currentSong.thumb, sizes: '512x512', type: 'image/jpeg' }]
+              : []
+          });
+        }
+        navigator.mediaSession.playbackState = this.isPlaying ? 'playing' : 'paused';
+      } catch (_) {}
+    }
+
+    // 2. Sync native Android Foreground Media Notification & MediaSession
+    const bridge = (window as any).AndroidMediaNotification;
+    if (bridge && this.currentSong) {
+      try {
+        if (type === 'metadata') {
+          bridge.updateMetadata(
+            this.currentSong.title,
+            this.currentSong.artist,
+            this.currentSong.thumb || '',
+            durationSec
+          );
+        }
+        bridge.updatePlaybackState(this.isPlaying, this.currentTime || 0);
+      } catch (err) {
+        console.error('[AndroidMediaBridge] Notification update failed:', err);
+      }
     }
   }
 }

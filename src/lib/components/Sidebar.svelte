@@ -1,5 +1,4 @@
 <script lang="ts">
-  import JamModal from './JamModal.svelte';
   import { jamStore } from '../jamStore.svelte';
 
   interface Props {
@@ -8,7 +7,6 @@
   }
 
   let { currentTab, onSelectTab }: Props = $props();
-  let isJamOpen = $state(false);
 </script>
 
 <aside class="w-16 h-full bg-black border-none flex flex-col items-center pt-0 pb-28 select-none flex-shrink-0 font-sans z-30">
@@ -65,7 +63,7 @@
     <!-- Jam Session Action (At the place of Settings button) -->
     <button
       type="button"
-      onclick={() => (isJamOpen = !isJamOpen)}
+      onclick={() => jamStore.toggleModal()}
       class="relative w-10 h-10 flex items-center justify-center transition-colors duration-150 cursor-pointer {jamStore.status === 'connected' ? 'text-accent' : 'text-neutral-500 hover:text-white'}"
       title={jamStore.status === 'connected' ? `Jamming in Room ${jamStore.roomCode}` : 'Jam Session'}
       aria-label="Jam Session"
@@ -92,5 +90,3 @@
     </button>
   </nav>
 </aside>
-
-<JamModal isOpen={isJamOpen} onClose={() => (isJamOpen = false)} />

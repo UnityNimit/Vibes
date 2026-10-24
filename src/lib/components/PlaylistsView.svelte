@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { onMount } from 'svelte';
+  import { isAndroid } from '../platform';
   import { playlistStore } from '../playlistStore.svelte';
   import { player } from '../player.svelte';
   import { savedStore } from '../savedStore.svelte';
@@ -15,6 +17,11 @@
   let isRenaming = $state<boolean>(false);
   let renameValue = $state<string>('');
   let renameInputEl = $state<HTMLInputElement | null>(null);
+  let isMobileAndroid = $state(isAndroid());
+
+  onMount(() => {
+    isMobileAndroid = isAndroid();
+  });
 
   let selectedPlaylist = $derived<Playlist | null>(
     playlistStore.playlists.find((p) => p.id === selectedPlaylistId) ?? null
@@ -107,7 +114,7 @@
   }
 </script>
 
-<div class="flex-1 h-full overflow-y-auto px-6 pt-3 pb-28 flex flex-col gap-5 select-none font-sans bg-black w-full smooth-scroll-container">
+<div class="flex-1 h-full overflow-y-auto px-3.5 sm:px-6 pt-3 pb-28 flex flex-col gap-5 select-none font-sans bg-black w-full smooth-scroll-container">
   {#if selectedPlaylist}
     <!-- Detail View: Single Playlist -->
     <div class="flex flex-col gap-6 w-full">
@@ -221,81 +228,134 @@
       <!-- Songs Table (Matching Liked & Saved views) -->
       {#if selectedPlaylist.songs.length > 0}
         <div class="flex flex-col gap-1 w-full mt-2">
-          <!-- Grid Column Header -->
-          <div class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 pb-2 text-xs text-neutral-500 font-mono w-full select-none">
-            <span class="text-center">#</span>
-            <span class="font-sans text-left">Track</span>
-            <span class="text-right">Size</span>
-            <span class="text-left">Artist / Album</span>
-            <span class="text-right">Time</span>
-            <span></span>
-          </div>
+          {#if !isMobileAndroid}
+            <!-- Desktop Grid Column Header -->
+            <div class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 pb-2 text-xs text-neutral-500 font-mono w-full select-none">
+              <span class="text-center">#</span>
+              <span class="font-sans text-left">Track</span>
+              <span class="text-right">Size</span>
+              <span class="text-left">Artist / Album</span>
+              <span class="text-right">Time</span>
+              <span></span>
+            </div>
+          {/if}
 
           <!-- Result Rows -->
           {#each selectedPlaylist.songs as song, i}
-            <div
-              role="button"
-              tabindex="0"
-              onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, i)}
-              onkeydown={(e) => { if (e.key === 'Enter' && selectedPlaylist) playPlaylist(selectedPlaylist, i); }}
-              class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
-            >
-              <!-- 1. Index or Pulse Equalizer -->
-              <div class="text-xs text-neutral-500 group-hover:text-white font-mono flex items-center justify-center">
-                {#if player.currentSong?.id === song.id && player.isPlaying}
-                  <PlayingEqualizer isPlaying={player.isPlaying} />
-                {:else}
-                  <span class="group-hover:hidden">{i + 1}</span>
-                  <svg class="w-3.5 h-3.5 fill-current hidden group-hover:block" viewBox="0 0 24 24">
-                    <path d="M8 5v14l11-7z" />
-                  </svg>
-                {/if}
-              </div>
-
-              <!-- 2. Track Title & Thumbnail -->
-              <div class="flex items-center gap-3 min-w-0">
-                <div class="w-10 h-10 aspect-square rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0">
-                  <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" />
+            {#if isMobileAndroid}
+              <!-- Android Mobile Track Row: Pure Track (Art + Title/Artist) + Time + Remove Action -->
+              <div
+                role="button"
+                tabindex="0"
+                onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, i)}
+                onkeydown={(e) => { if (e.key === 'Enter' && selectedPlaylist) playPlaylist(selectedPlaylist, i); }}
+                class="flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === song.id ? 'bg-accent/15' : ''}"
+              >
+                <!-- Track: Thumbnail + Title & Artist -->
+                <div class="flex items-center gap-3 min-w-0 flex-1">
+                  <div class="w-12 h-12 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
+                    <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" />
+                  </div>
+                  <div class="flex flex-col min-w-0 flex-1">
+                    <p class="text-sm font-medium truncate {player.currentSong?.id === song.id ? 'text-accent' : 'text-white'}" title={song.title}>
+                      {song.title}
+                    </p>
+                    <p class="text-xs text-neutral-400 font-normal truncate mt-0.5">
+                      {song.artist || song.album || 'Unknown'}
+                    </p>
+                  </div>
                 </div>
-                <div class="min-w-0 flex-1">
-                  <p class="text-xs sm:text-sm font-medium text-white truncate group-hover:text-accent transition-colors" title={song.title}>
-                    {song.title}
-                  </p>
+
+                <!-- Time + Remove Action -->
+                <div class="flex items-center gap-2 flex-shrink-0 pl-2">
+                  {#if player.currentSong?.id === song.id && player.isPlaying}
+                    <PlayingEqualizer isPlaying={player.isPlaying} />
+                  {:else}
+                    <span class="text-xs text-neutral-500 font-mono">
+                      {song.duration || '—'}
+                    </span>
+                  {/if}
+                  <button
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      if (selectedPlaylist) playlistStore.removeSong(selectedPlaylist.id, song.id);
+                    }}
+                    class="p-2 text-neutral-500 active:text-white transition-colors cursor-pointer"
+                    title="Remove from playlist"
+                    aria-label="Remove from playlist"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
               </div>
+            {:else}
+              <!-- Desktop Grid Row (Unchanged) -->
+              <div
+                role="button"
+                tabindex="0"
+                onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, i)}
+                onkeydown={(e) => { if (e.key === 'Enter' && selectedPlaylist) playPlaylist(selectedPlaylist, i); }}
+                class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
+              >
+                <!-- 1. Index or Pulse Equalizer -->
+                <div class="text-xs text-neutral-500 group-hover:text-white font-mono flex items-center justify-center">
+                  {#if player.currentSong?.id === song.id && player.isPlaying}
+                    <PlayingEqualizer isPlaying={player.isPlaying} />
+                  {:else}
+                    <span class="group-hover:hidden">{i + 1}</span>
+                    <svg class="w-3.5 h-3.5 fill-current hidden group-hover:block" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z" />
+                    </svg>
+                  {/if}
+                </div>
 
-              <!-- 3. Size -->
-              <div class="text-right text-xs text-neutral-500 font-mono truncate">
-                {savedStore.isSaved(song.id) ? formatSongSize(savedStore.getSize(song.id)) : '—'}
-              </div>
+                <!-- 2. Track Title & Thumbnail -->
+                <div class="flex items-center gap-3 min-w-0">
+                  <div class="w-10 h-10 aspect-square rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0">
+                    <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" />
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="text-xs sm:text-sm font-medium text-white truncate group-hover:text-accent transition-colors" title={song.title}>
+                      {song.title}
+                    </p>
+                  </div>
+                </div>
 
-              <!-- 4. Artist / Album -->
-              <div class="text-left text-xs text-neutral-400 font-normal truncate">
-                {song.artist || song.album || 'Unknown'}
-              </div>
+                <!-- 3. Size -->
+                <div class="text-right text-xs text-neutral-500 font-mono truncate">
+                  {savedStore.isSaved(song.id) ? formatSongSize(savedStore.getSize(song.id)) : '—'}
+                </div>
 
-              <!-- 5. Time -->
-              <div class="text-right text-xs text-neutral-500 font-mono">
-                {song.duration || '—'}
-              </div>
+                <!-- 4. Artist / Album -->
+                <div class="text-left text-xs text-neutral-400 font-normal truncate">
+                  {song.artist || song.album || 'Unknown'}
+                </div>
 
-              <!-- 6. Remove Action -->
-              <div class="flex items-center justify-center">
-                <button
-                  onclick={(e) => {
-                    e.stopPropagation();
-                    if (selectedPlaylist) playlistStore.removeSong(selectedPlaylist.id, song.id);
-                  }}
-                  class="p-1.5 text-neutral-600 hover:text-white transition-colors cursor-pointer"
-                  title="Remove from playlist"
-                  aria-label="Remove from playlist"
-                >
-                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
+                <!-- 5. Time -->
+                <div class="text-right text-xs text-neutral-500 font-mono">
+                  {song.duration || '—'}
+                </div>
+
+                <!-- 6. Remove Action -->
+                <div class="flex items-center justify-center">
+                  <button
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      if (selectedPlaylist) playlistStore.removeSong(selectedPlaylist.id, song.id);
+                    }}
+                    class="p-1.5 text-neutral-600 hover:text-white transition-colors cursor-pointer"
+                    title="Remove from playlist"
+                    aria-label="Remove from playlist"
+                  >
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
               </div>
-            </div>
+            {/if}
           {/each}
         </div>
       {:else}

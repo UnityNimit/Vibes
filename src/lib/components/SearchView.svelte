@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { isAndroid } from '../platform';
   import { player } from '../player.svelte';
   import { savedStore } from '../savedStore.svelte';
   import { feedStore } from '../feedStore.svelte';
@@ -16,6 +17,7 @@
   let isLoadingMore = $state(false);
   let hasSearched = $state(false);
   let scrollContainerEl = $state<HTMLDivElement | null>(null);
+  let isMobileAndroid = $state(isAndroid());
 
   // Containers for horizontal carousels
   let recommendedContainerEl = $state<HTMLDivElement | null>(null);
@@ -23,15 +25,15 @@
   let newContainerEl = $state<HTMLDivElement | null>(null);
   let oldContainerEl = $state<HTMLDivElement | null>(null);
 
-  // Drag-to-scroll horizontal interaction state
-  let isMouseDown = false;
+  // Mouse drag-to-scroll interaction for desktop (Touch devices use native hardware compositor momentum)
+  let isPointerDown = false;
   let dragStartX = 0;
   let dragScrollLeft = 0;
   let activeDragEl: HTMLElement | null = null;
   let didDrag = false;
-  let dragRafId: number | null = null;
 
   onMount(() => {
+    isMobileAndroid = isAndroid();
     if (feedStore.recommendedSongs.length === 0) {
       feedStore.refreshAllFeeds();
     }
@@ -60,55 +62,69 @@
     el.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
   }
 
-  // Pure non-obstructive wheel handler: only scroll horizontally when user holds Shift
+  // Flawless Wheel Handling:
+  // - Shift + Wheel: horizontal carousel scroll
+  // - Trackpad horizontal swipe: native horizontal scroll
+  // - Normal vertical mouse wheel: ALWAYS forwards directly to parent scrollContainerEl,
+  //   guaranteeing vertical scrolling never gets trapped or stuck over horizontal lists!
   function handleHorizontalWheel(e: WheelEvent) {
     const el = e.currentTarget as HTMLElement;
     if (!el) return;
+
+    // 1. Shift key + Wheel -> scroll carousel horizontally
     if (e.shiftKey && e.deltaY !== 0) {
       e.preventDefault();
       el.scrollLeft += e.deltaY;
+      return;
     }
-    // Normal wheel vertical delta is NOT prevented, allowing fluid, natural vertical page scroll at all times!
+
+    // 2. Trackpad / Tilt horizontal gesture -> let carousel scroll horizontally
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+      return;
+    }
+
+    // 3. Normal vertical wheel -> forward directly to parent scrollContainerEl
+    if (scrollContainerEl && e.deltaY !== 0) {
+      e.preventDefault();
+      scrollContainerEl.scrollBy({ top: e.deltaY, behavior: 'auto' });
+    }
   }
 
-  // High-refresh-rate GPU-synchronized mouse drag-to-scroll handlers
-  function handleMouseDown(e: MouseEvent) {
-    if (e.button !== 0) return;
+  // High-performance pointer drag-to-scroll handlers (Mouse only, no interference with mobile touch)
+  function handlePointerDown(e: PointerEvent) {
+    if (e.pointerType !== 'mouse' || e.button !== 0) return;
     const target = e.currentTarget as HTMLElement;
-    isMouseDown = true;
+    isPointerDown = true;
     activeDragEl = target;
-    dragStartX = e.pageX - target.offsetLeft;
+    dragStartX = e.clientX;
     dragScrollLeft = target.scrollLeft;
     didDrag = false;
+    try {
+      target.setPointerCapture(e.pointerId);
+    } catch (_) {}
   }
 
-  function handleMouseMove(e: MouseEvent) {
-    if (!isMouseDown || !activeDragEl) return;
-    const x = e.pageX - activeDragEl.offsetLeft;
-    const walk = x - dragStartX;
-    if (Math.abs(walk) > 4) {
+  function handlePointerMove(e: PointerEvent) {
+    if (!isPointerDown || !activeDragEl || e.pointerType !== 'mouse') return;
+    const deltaX = e.clientX - dragStartX;
+    if (Math.abs(deltaX) > 5) {
       didDrag = true;
-      if (!dragRafId) {
-        dragRafId = requestAnimationFrame(() => {
-          if (activeDragEl) {
-            activeDragEl.scrollLeft = dragScrollLeft - walk;
-          }
-          dragRafId = null;
-        });
-      }
+      activeDragEl.scrollLeft = dragScrollLeft - deltaX;
     }
   }
 
-  function handleMouseUp() {
-    isMouseDown = false;
-    if (dragRafId) {
-      cancelAnimationFrame(dragRafId);
-      dragRafId = null;
+  function handlePointerUp(e: PointerEvent) {
+    if (e.pointerType !== 'mouse') return;
+    if (activeDragEl) {
+      try {
+        activeDragEl.releasePointerCapture(e.pointerId);
+      } catch (_) {}
     }
+    isPointerDown = false;
     activeDragEl = null;
     setTimeout(() => {
       didDrag = false;
-    }, 80);
+    }, 100);
   }
 
   function handleInput(e: Event) {
@@ -207,6 +223,7 @@
     }}
     onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: sectionTitle, songs: songList ?? [song] }, index); }}
     class="group flex flex-col gap-2 cursor-pointer text-left w-36 sm:w-40 md:w-44 flex-shrink-0 select-none virtual-carousel-card"
+    style="touch-action: pan-x pan-y;"
   >
     <!-- Standalone Artwork Tile -->
     <div class="relative aspect-square w-full rounded-xl overflow-hidden bg-[#111114] shadow-md pointer-events-none flex-shrink-0">
@@ -240,7 +257,7 @@
 <div
   bind:this={scrollContainerEl}
   onscroll={handleScroll}
-  class="flex-1 h-full overflow-y-auto px-6 pt-3 pb-28 flex flex-col gap-6 select-none font-sans bg-black w-full smooth-scroll-container"
+  class="flex-1 h-full overflow-y-auto px-3.5 sm:px-6 pt-3 pb-28 flex flex-col gap-6 select-none font-sans bg-black w-full smooth-scroll-container"
 >
   <!-- Search Input Bar & Recommendations -->
   <div class="flex flex-col gap-3 w-full">
@@ -324,73 +341,114 @@
       <div class="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
     </div>
   {:else if hasSearched && results.length > 0}
-    <!-- Active Search Results: Strict CSS Grid Alignment & Full Horizontal Expansion with Infinite Scrolling -->
+    <!-- Active Search Results -->
     <div class="flex flex-col gap-1 w-full pt-1">
-      <!-- Grid Column Header -->
-      <div class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 pb-2 text-xs text-neutral-500 font-mono w-full select-none">
-        <span class="text-center">#</span>
-        <span class="font-sans text-left">Track</span>
-        <span class="text-right">Size</span>
-        <span class="text-left">Artist</span>
-        <span class="text-right">Time</span>
-        <span></span>
-      </div>
+      {#if !isMobileAndroid}
+        <!-- Desktop Grid Column Header -->
+        <div class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 pb-2 text-xs text-neutral-500 font-mono w-full select-none">
+          <span class="text-center">#</span>
+          <span class="font-sans text-left">Track</span>
+          <span class="text-right">Size</span>
+          <span class="text-left">Artist</span>
+          <span class="text-right">Time</span>
+          <span></span>
+        </div>
+      {/if}
 
       <!-- Result Rows -->
       {#each results as song, i}
-        <div
-          role="button"
-          tabindex="0"
-          onpointerenter={() => player.prefetchStream(song)}
-          onclick={() => player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i)}
-          onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i); }}
-          class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
-        >
-          <!-- 1. Index or Pulse Equalizer -->
-          <div class="text-xs text-neutral-500 group-hover:text-white font-mono flex items-center justify-center">
-            {#if player.currentSong?.id === song.id && player.isPlaying}
-              <PlayingEqualizer isPlaying={player.isPlaying} />
-            {:else}
-              <span class="group-hover:hidden">{i + 1}</span>
-              <svg class="w-3.5 h-3.5 hidden group-hover:block fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-            {/if}
-          </div>
-
-          <!-- 2. Track: Thumbnail + Title -->
-          <div class="flex items-center gap-3 min-w-0">
-            <div class="w-10 h-10 aspect-square rounded-lg bg-[#111114] overflow-hidden flex-shrink-0">
-              <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" iconClass="w-4 h-4 text-neutral-500" />
-            </div>
-            <div class="flex flex-col min-w-0 flex-1">
-              <div class="flex items-center gap-1.5">
-                <h3 class="text-xs sm:text-sm font-medium truncate {player.currentSong?.id === song.id ? 'text-accent' : 'text-neutral-200 group-hover:text-white'}">
+        {#if isMobileAndroid}
+          <!-- Android Mobile Track Row: Pure Track (Art + Title/Artist) + Time (Duration / Equalizer) -->
+          <div
+            role="button"
+            tabindex="0"
+            onpointerenter={() => player.prefetchStream(song)}
+            onclick={() => player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i)}
+            onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i); }}
+            class="flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === song.id ? 'bg-accent/15' : ''}"
+          >
+            <!-- Track: Thumbnail + Title & Artist -->
+            <div class="flex items-center gap-3 min-w-0 flex-1">
+              <div class="w-12 h-12 rounded-lg bg-[#111114] overflow-hidden flex-shrink-0 relative">
+                <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" iconClass="w-5 h-5 text-neutral-500" />
+              </div>
+              <div class="flex flex-col min-w-0 flex-1">
+                <h3 class="text-sm font-medium truncate {player.currentSong?.id === song.id ? 'text-accent' : 'text-neutral-100'}">
                   {song.title}
                 </h3>
+                <p class="text-xs text-neutral-400 font-normal truncate mt-0.5">
+                  {song.artist}
+                </p>
               </div>
-              <p class="text-xs text-neutral-400 font-normal truncate mt-0.5 md:hidden">
-                {song.artist}
-              </p>
+            </div>
+
+            <!-- Time or Active Equalizer -->
+            <div class="flex items-center justify-end flex-shrink-0 pl-2">
+              {#if player.currentSong?.id === song.id && player.isPlaying}
+                <PlayingEqualizer isPlaying={player.isPlaying} />
+              {:else}
+                <span class="text-xs text-neutral-500 font-mono">
+                  {song.duration}
+                </span>
+              {/if}
             </div>
           </div>
+        {:else}
+          <!-- Desktop Grid Row (Unchanged) -->
+          <div
+            role="button"
+            tabindex="0"
+            onpointerenter={() => player.prefetchStream(song)}
+            onclick={() => player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i)}
+            onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i); }}
+            class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
+          >
+            <!-- 1. Index or Pulse Equalizer -->
+            <div class="text-xs text-neutral-500 group-hover:text-white font-mono flex items-center justify-center">
+              {#if player.currentSong?.id === song.id && player.isPlaying}
+                <PlayingEqualizer isPlaying={player.isPlaying} />
+              {:else}
+                <span class="group-hover:hidden">{i + 1}</span>
+                <svg class="w-3.5 h-3.5 hidden group-hover:block fill-current" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+              {/if}
+            </div>
 
-          <!-- 3. Size -->
-          <div class="text-right text-xs text-neutral-400 font-mono">
-            {formatSongSize(savedStore.getSize(song.id), song.duration)}
+            <!-- 2. Track: Thumbnail + Title -->
+            <div class="flex items-center gap-3 min-w-0">
+              <div class="w-10 h-10 aspect-square rounded-lg bg-[#111114] overflow-hidden flex-shrink-0">
+                <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" iconClass="w-4 h-4 text-neutral-500" />
+              </div>
+              <div class="flex flex-col min-w-0 flex-1">
+                <div class="flex items-center gap-1.5">
+                  <h3 class="text-xs sm:text-sm font-medium truncate {player.currentSong?.id === song.id ? 'text-accent' : 'text-neutral-200 group-hover:text-white'}">
+                    {song.title}
+                  </h3>
+                </div>
+                <p class="text-xs text-neutral-400 font-normal truncate mt-0.5 md:hidden">
+                  {song.artist}
+                </p>
+              </div>
+            </div>
+
+            <!-- 3. Size -->
+            <div class="text-right text-xs text-neutral-400 font-mono">
+              {formatSongSize(savedStore.getSize(song.id), song.duration)}
+            </div>
+
+            <!-- 4. Artist -->
+            <div class="text-xs text-neutral-400 font-normal truncate text-left" title={song.artist}>
+              {song.artist}
+            </div>
+
+            <!-- 5. Duration -->
+            <div class="text-right text-xs text-neutral-400 font-mono">
+              {song.duration}
+            </div>
+
+            <!-- 6. Spacer -->
+            <div class="flex items-center justify-end"></div>
           </div>
-
-          <!-- 4. Artist -->
-          <div class="text-xs text-neutral-400 font-normal truncate text-left" title={song.artist}>
-            {song.artist}
-          </div>
-
-          <!-- 5. Duration -->
-          <div class="text-right text-xs text-neutral-400 font-mono">
-            {song.duration}
-          </div>
-
-          <!-- 6. Spacer -->
-          <div class="flex items-center justify-end"></div>
-        </div>
+        {/if}
       {/each}
 
       <!-- Infinite Scroll Loading Spinner -->
@@ -477,11 +535,11 @@
             aria-label="Recommended songs carousel"
             onscroll={(e) => handleHorizontalScroll('recommended', e)}
             onwheel={handleHorizontalWheel}
-            onmousedown={handleMouseDown}
-            onmousemove={handleMouseMove}
-            onmouseup={handleMouseUp}
-            onmouseleave={handleMouseUp}
-            class="flex gap-4 overflow-x-auto pb-3 pt-1 no-scrollbar select-none cursor-grab active:cursor-grabbing smooth-scroll-container"
+            onpointerdown={handlePointerDown}
+            onpointermove={handlePointerMove}
+            onpointerup={handlePointerUp}
+            onpointercancel={handlePointerUp}
+            class="horizontal-carousel flex gap-4 pb-3 pt-1 select-none cursor-grab active:cursor-grabbing"
           >
             {#each feedStore.recommendedSongs as song, i}
               {@render songCard(song, 'Recommended for You', feedStore.recommendedSongs, i)}
@@ -541,11 +599,11 @@
             aria-label="Trending songs carousel"
             onscroll={(e) => handleHorizontalScroll('trending', e)}
             onwheel={handleHorizontalWheel}
-            onmousedown={handleMouseDown}
-            onmousemove={handleMouseMove}
-            onmouseup={handleMouseUp}
-            onmouseleave={handleMouseUp}
-            class="flex gap-4 overflow-x-auto pb-3 pt-1 no-scrollbar select-none cursor-grab active:cursor-grabbing smooth-scroll-container"
+            onpointerdown={handlePointerDown}
+            onpointermove={handlePointerMove}
+            onpointerup={handlePointerUp}
+            onpointercancel={handlePointerUp}
+            class="horizontal-carousel flex gap-4 pb-3 pt-1 select-none cursor-grab active:cursor-grabbing"
           >
             {#each feedStore.trendingSongs as song, i}
               {@render songCard(song, 'Trending', feedStore.trendingSongs, i)}
@@ -605,11 +663,11 @@
             aria-label="New to you songs carousel"
             onscroll={(e) => handleHorizontalScroll('new', e)}
             onwheel={handleHorizontalWheel}
-            onmousedown={handleMouseDown}
-            onmousemove={handleMouseMove}
-            onmouseup={handleMouseUp}
-            onmouseleave={handleMouseUp}
-            class="flex gap-4 overflow-x-auto pb-3 pt-1 no-scrollbar select-none cursor-grab active:cursor-grabbing smooth-scroll-container"
+            onpointerdown={handlePointerDown}
+            onpointermove={handlePointerMove}
+            onpointerup={handlePointerUp}
+            onpointercancel={handlePointerUp}
+            class="horizontal-carousel flex gap-4 pb-3 pt-1 select-none cursor-grab active:cursor-grabbing"
           >
             {#each feedStore.newSongs as song, i}
               {@render songCard(song, 'New to You', feedStore.newSongs, i)}
@@ -669,11 +727,11 @@
             aria-label="Your old ones songs carousel"
             onscroll={(e) => handleHorizontalScroll('old', e)}
             onwheel={handleHorizontalWheel}
-            onmousedown={handleMouseDown}
-            onmousemove={handleMouseMove}
-            onmouseup={handleMouseUp}
-            onmouseleave={handleMouseUp}
-            class="flex gap-4 overflow-x-auto pb-3 pt-1 no-scrollbar select-none cursor-grab active:cursor-grabbing smooth-scroll-container"
+            onpointerdown={handlePointerDown}
+            onpointermove={handlePointerMove}
+            onpointerup={handlePointerUp}
+            onpointercancel={handlePointerUp}
+            class="horizontal-carousel flex gap-4 pb-3 pt-1 select-none cursor-grab active:cursor-grabbing"
           >
             {#each feedStore.oldSongs as song, i}
               {@render songCard(song, 'Your Old Ones', feedStore.oldSongs, i)}
