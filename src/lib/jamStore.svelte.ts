@@ -4,6 +4,16 @@ import type { Song, PlaybackContext } from './types';
 
 const PEER_PREFIX = 'vibes-jam-';
 
+const ICE_SERVERS = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: 'stun:stun1.l.google.com:19302' },
+  { urls: 'stun:stun2.l.google.com:19302' },
+  { urls: 'stun:stun3.l.google.com:19302' },
+  { urls: 'stun:stun4.l.google.com:19302' },
+  { urls: 'stun:stun.cloudflare.com:3478' },
+  { urls: 'stun:stun.services.mozilla.com' },
+];
+
 export type JamRole = 'host' | 'guest' | null;
 export type JamStatus = 'idle' | 'connecting' | 'connected' | 'error';
 export type DevicePlatform = 'windows' | 'android' | 'other';
@@ -15,25 +25,11 @@ export interface JamMember {
   isHost: boolean;
 }
 
-interface ClockPingMsg {
-  type: 'PING';
-  seq: number;
-  clientTime: number;
-}
-
-interface ClockPongMsg {
-  type: 'PONG';
-  seq: number;
-  clientTime: number;
-  hostTime: number;
-}
-
 interface SyncPlayMsg {
   type: 'PLAY';
   song: Song;
-  context: PlaybackContext;
+  context?: PlaybackContext;
   position: number;
-  targetHostTime: number;
 }
 
 interface SyncPauseMsg {
@@ -44,14 +40,18 @@ interface SyncPauseMsg {
 interface SyncSeekMsg {
   type: 'SEEK';
   position: number;
-  targetHostTime: number;
 }
 
 interface SyncHeartbeatMsg {
   type: 'HEARTBEAT';
-  hostTime: number;
-  position: number;
+  songId: string;
   isPlaying: boolean;
+  position: number;
+  queueIndex: number;
+}
+
+interface StateRequestMsg {
+  type: 'STATE_REQUEST';
 }
 
 interface StateResponseMsg {
@@ -63,7 +63,6 @@ interface StateResponseMsg {
   queue: Song[];
   queueIndex: number;
   allowGuestControls: boolean;
-  targetHostTime?: number;
 }
 
 interface QueueSyncMsg {
@@ -92,18 +91,29 @@ interface MemberListMsg {
   members: JamMember[];
 }
 
+interface PingMsg {
+  type: 'PING';
+  t: number;
+}
+
+interface PongMsg {
+  type: 'PONG';
+  t: number;
+}
+
 type JamMessage =
-  | ClockPingMsg
-  | ClockPongMsg
   | SyncPlayMsg
   | SyncPauseMsg
   | SyncSeekMsg
   | SyncHeartbeatMsg
+  | StateRequestMsg
   | StateResponseMsg
   | QueueSyncMsg
   | GuestActionMsg
   | PeerInfoMsg
-  | MemberListMsg;
+  | MemberListMsg
+  | PingMsg
+  | PongMsg;
 
 function detectDevice(): { device: DevicePlatform; name: string } {
   if (typeof navigator === 'undefined') {
@@ -132,37 +142,23 @@ class JamStore {
   members = $state<JamMember[]>([]);
   localDevice = detectDevice();
 
-  // Clock Synchronization Metrics
-  clockOffset = $state<number>(0); // Host time - Guest time (in ms)
-  rttMs = $state<number>(0); // Round trip time in ms
-  driftMs = $state<number>(0); // Current audio phase drift in ms
-  isClockSynced = $state<boolean>(false);
-
-  // Hardware Delay Calibration (stored locally)
-  hardwareCalibrationMs = $state<number>(0);
+  // Metrics
+  rttMs = $state<number>(0);
+  driftMs = $state<number>(0);
 
   private peer: Peer | null = null;
   private connections: Map<string, DataConnection> = new Map();
   private hostConnection: DataConnection | null = null;
   private guestMeta: Map<string, { name: string; device: DevicePlatform }> = new Map();
   private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
-  private clockSyncInterval: ReturnType<typeof setInterval> | null = null;
-  private scheduledTimer: ReturnType<typeof setTimeout> | null = null;
-  private pendingPongHandler: ((msg: ClockPongMsg) => void) | null = null;
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private lastCatchUpSeek = 0;
 
   constructor() {
     if (typeof window !== 'undefined') {
-      const savedCal = localStorage.getItem('vibes_jam_calibration');
-      if (savedCal !== null) {
-        const parsed = parseInt(savedCal, 10);
-        if (!isNaN(parsed)) this.hardwareCalibrationMs = parsed;
-      }
-
       // Hook delegate on player for guest interception and queue synchronization
       player.jamDelegate = {
         isGuest: () => this.role === 'guest' && this.status === 'connected',
-        getClockOffset: () => this.clockOffset,
-        getHardwareCalibration: () => this.hardwareCalibrationMs,
         onUserPlay: (song, context) => {
           if (this.allowGuestControls) {
             this.sendGuestAction({ action: 'play_now', song, context });
@@ -246,13 +242,6 @@ class JamStore {
     }
   }
 
-  setHardwareCalibration(ms: number) {
-    this.hardwareCalibrationMs = ms;
-    if (typeof window !== 'undefined') {
-      localStorage.setItem('vibes_jam_calibration', String(ms));
-    }
-  }
-
   generateRoomCode(): string {
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZ';
     let code = '';
@@ -276,12 +265,7 @@ class JamStore {
     try {
       this.peer = new Peer(fullId, {
         config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun.cloudflare.com:3478' },
-          ],
+          iceServers: ICE_SERVERS,
         },
       });
 
@@ -325,8 +309,7 @@ class JamStore {
       this.connections.set(conn.peer, conn);
       this.peerCount = this.connections.size + 1;
 
-      // Send initial full state to newly joined guest
-      const targetHostTime = player.isPlaying ? performance.now() + 450 : undefined;
+      // Send initial full state immediately to newly joined guest
       const msg: StateResponseMsg = {
         type: 'STATE_RESPONSE',
         song: player.currentSong,
@@ -336,7 +319,6 @@ class JamStore {
         queue: player.queue,
         queueIndex: player.queueIndex,
         allowGuestControls: this.allowGuestControls,
-        targetHostTime,
       };
       conn.send(msg);
 
@@ -364,16 +346,25 @@ class JamStore {
 
   private handleHostReceivedData(msg: JamMessage, conn: DataConnection) {
     if (msg.type === 'PING') {
-      const pong: ClockPongMsg = {
+      conn.send({
         type: 'PONG',
-        seq: msg.seq,
-        clientTime: msg.clientTime,
-        hostTime: performance.now(),
-      };
-      conn.send(pong);
+        t: msg.t,
+      });
     } else if (msg.type === 'PEER_INFO') {
       this.guestMeta.set(conn.peer, { name: msg.name, device: msg.device });
       this.updateHostMemberList();
+    } else if (msg.type === 'STATE_REQUEST') {
+      const resp: StateResponseMsg = {
+        type: 'STATE_RESPONSE',
+        song: player.currentSong,
+        isPlaying: player.isPlaying,
+        position: player.currentTime,
+        context: player.currentContext,
+        queue: player.queue,
+        queueIndex: player.queueIndex,
+        allowGuestControls: this.allowGuestControls,
+      };
+      conn.send(resp);
     } else if (msg.type === 'GUEST_ACTION') {
       this.handleHostGuestAction(msg);
     }
@@ -442,12 +433,7 @@ class JamStore {
     try {
       this.peer = new Peer({
         config: {
-          iceServers: [
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun.cloudflare.com:3478' },
-          ],
+          iceServers: ICE_SERVERS,
         },
       });
 
@@ -472,7 +458,12 @@ class JamStore {
               device: this.localDevice.device,
             });
 
-            this.startGuestClockSync();
+            // Request immediate state from Host
+            conn.send({
+              type: 'STATE_REQUEST',
+            });
+
+            this.startPingInterval();
             resolve(true);
           });
 
@@ -498,7 +489,7 @@ class JamStore {
           }
         });
 
-        this.peer.on('error', (err) => {
+        this.peer.on('error', (err: any) => {
           console.error('[Peer Error]', err);
           this.status = 'error';
           this.errorMessage = 'Room not found or network unavailable';
@@ -512,76 +503,35 @@ class JamStore {
     }
   }
 
-  // --- GUEST NTP CLOCK SYNC ---
-  private startGuestClockSync() {
-    this.calibrateClock();
-    if (this.clockSyncInterval) clearInterval(this.clockSyncInterval);
-    this.clockSyncInterval = setInterval(() => {
-      this.calibrateClock();
-    }, 25000);
-  }
-
-  private calibrateClock() {
-    if (!this.hostConnection || !this.hostConnection.open) return;
-
-    const samples: { rtt: number; offset: number }[] = [];
-    let pingsSent = 0;
-    const totalPings = 8;
-
-    const pingNext = () => {
-      if (pingsSent >= totalPings || !this.hostConnection?.open) {
-        if (samples.length > 0) {
-          samples.sort((a, b) => a.rtt - b.rtt);
-          const best = samples.slice(0, Math.min(3, samples.length));
-          const avgOffset = best.reduce((sum, s) => sum + s.offset, 0) / best.length;
-          this.clockOffset = avgOffset;
-          this.rttMs = Math.round(samples[0].rtt * 10) / 10;
-          this.isClockSynced = true;
-        }
-        return;
+  private startPingInterval() {
+    if (this.pingInterval) clearInterval(this.pingInterval);
+    this.pingInterval = setInterval(() => {
+      if (this.role === 'guest' && this.hostConnection?.open) {
+        this.hostConnection.send({
+          type: 'PING',
+          t: performance.now(),
+        });
       }
-
-      pingsSent++;
-      const pingMsg: ClockPingMsg = {
-        type: 'PING',
-        seq: pingsSent,
-        clientTime: performance.now(),
-      };
-      this.hostConnection.send(pingMsg);
-    };
-
-    const handlePong = (msg: ClockPongMsg) => {
-      const now = performance.now();
-      const rtt = now - msg.clientTime;
-      const oneWay = rtt / 2;
-      const offset = msg.hostTime - (now - oneWay);
-      samples.push({ rtt, offset });
-      setTimeout(pingNext, 35);
-    };
-
-    this.pendingPongHandler = handlePong;
-    pingNext();
+    }, 8000);
   }
 
   // --- GUEST MESSAGE DISPATCHER ---
   private handleGuestReceivedData(msg: JamMessage) {
     if (msg.type === 'PONG') {
-      if (this.pendingPongHandler) {
-        this.pendingPongHandler(msg);
-      }
+      this.rttMs = Math.round(performance.now() - msg.t);
       return;
     }
 
     if (msg.type === 'PLAY') {
-      this.executeScheduledPlay(msg);
+      this.executePlay(msg);
     } else if (msg.type === 'PAUSE') {
       this.executePause(msg);
     } else if (msg.type === 'SEEK') {
-      this.executeScheduledSeek(msg);
+      this.executeSeek(msg);
     } else if (msg.type === 'HEARTBEAT') {
-      this.executeHeartbeatPhaseLock(msg);
+      this.executeHeartbeatSync(msg);
     } else if (msg.type === 'STATE_RESPONSE') {
-      this.executeInitialState(msg);
+      this.executeStateResponse(msg);
     } else if (msg.type === 'QUEUE_SYNC') {
       player.setQueueFromSync(msg.queue, msg.queueIndex);
     } else if (msg.type === 'MEMBER_LIST') {
@@ -590,121 +540,98 @@ class JamStore {
     }
   }
 
-  private executeInitialState(msg: StateResponseMsg) {
+  private executeStateResponse(msg: StateResponseMsg) {
     this.allowGuestControls = msg.allowGuestControls;
     if (msg.queue && msg.queue.length > 0) {
       player.setQueueFromSync(msg.queue, msg.queueIndex);
     }
     if (msg.song) {
-      player.play(msg.song, msg.context, undefined, true, msg.targetHostTime, msg.position);
-      if (!msg.isPlaying && player.audio) {
-        player.audio.pause();
-        player.isPlaying = false;
-      }
+      player.play(
+        msg.song,
+        msg.context,
+        msg.queueIndex,
+        true,
+        msg.position,
+        msg.isPlaying
+      );
     }
   }
 
-  private executeScheduledPlay(msg: SyncPlayMsg) {
-    if (this.scheduledTimer) {
-      clearTimeout(this.scheduledTimer);
-      this.scheduledTimer = null;
-    }
-
-    player.play(msg.song, msg.context, undefined, true, msg.targetHostTime, msg.position);
-
-    const hostNow = performance.now() + this.clockOffset;
-    const remainingMs = msg.targetHostTime - hostNow - this.hardwareCalibrationMs;
-
-    const triggerPlay = () => {
-      if (player.audio) {
-        const currentHostNow = performance.now() + this.clockOffset;
-        const elapsedSec = Math.max(0, (currentHostNow - msg.targetHostTime - this.hardwareCalibrationMs) / 1000);
-        const targetPos = msg.position + elapsedSec;
-
-        if (Math.abs(player.audio.currentTime - targetPos) > 0.04) {
-          player.audio.currentTime = targetPos;
-        }
-        player.audio.playbackRate = 1.0;
-        player.audio.play().catch(() => {});
+  private executePlay(msg: SyncPlayMsg) {
+    // If we're already on this exact song, ensure play state without re-fetching stream
+    if (player.currentSong?.id === msg.song.id && player.audio?.src) {
+      if (Math.abs(player.currentTime - msg.position) > 4) {
+        player.audio.currentTime = msg.position;
+        player.currentTime = msg.position;
       }
-    };
-
-    if (remainingMs <= 4) {
-      triggerPlay();
-    } else {
-      this.scheduledTimer = setTimeout(triggerPlay, remainingMs);
+      player.resume(true);
+      return;
     }
+
+    // New song - start playback cleanly from host position
+    player.play(msg.song, msg.context, undefined, true, msg.position, true);
   }
 
   private executePause(msg: SyncPauseMsg) {
-    if (this.scheduledTimer) {
-      clearTimeout(this.scheduledTimer);
-      this.scheduledTimer = null;
-    }
-    if (player.audio) {
-      player.audio.pause();
-      player.audio.currentTime = msg.position;
-      player.currentTime = msg.position;
-      player.isPlaying = false;
-    }
-  }
-
-  private executeScheduledSeek(msg: SyncSeekMsg) {
-    if (this.scheduledTimer) {
-      clearTimeout(this.scheduledTimer);
-      this.scheduledTimer = null;
-    }
-
-    if (player.audio) {
+    player.pause(true);
+    if (Math.abs(player.currentTime - msg.position) > 4 && player.audio) {
       player.audio.currentTime = msg.position;
       player.currentTime = msg.position;
     }
-
-    const hostNow = performance.now() + this.clockOffset;
-    const remainingMs = msg.targetHostTime - hostNow - this.hardwareCalibrationMs;
-
-    const resume = () => {
-      if (player.audio) {
-        player.audio.currentTime = msg.position;
-        player.audio.playbackRate = 1.0;
-        player.audio.play().catch(() => {});
-      }
-    };
-
-    if (remainingMs <= 4) {
-      resume();
-    } else {
-      this.scheduledTimer = setTimeout(resume, remainingMs);
-    }
   }
 
-  private executeHeartbeatPhaseLock(msg: SyncHeartbeatMsg) {
-    if (!player.audio || !msg.isPlaying || player.isLoading) return;
+  private executeSeek(msg: SyncSeekMsg) {
+    player.seek(msg.position, true);
+  }
 
-    const hostNow = performance.now() + this.clockOffset;
-    const elapsedSec = Math.max(0, (hostNow - msg.hostTime) / 1000);
-    const expectedPosSec = msg.position + elapsedSec;
-    const actualPosSec = player.audio.currentTime - (this.hardwareCalibrationMs / 1000);
-
-    const driftSec = actualPosSec - expectedPosSec;
-    const driftMs = driftSec * 1000;
-    this.driftMs = Math.round(driftMs * 10) / 10;
-
-    // Phase-Lock Thresholds:
-    // |drift| <= 8ms: Perfect acoustic lock! (zero rate adjustment needed)
-    // 8ms < drift <= 140ms: Micro-adjust rate by 0.7% (completely inaudible, zero glitch)
-    // |drift| > 140ms: Clean instant sync seek
-    if (Math.abs(driftMs) <= 8) {
-      if (player.audio.playbackRate !== 1.0) {
-        player.audio.playbackRate = 1.0;
+  private executeHeartbeatSync(msg: SyncHeartbeatMsg) {
+    // 1. Song identity verification
+    if (msg.songId && player.currentSong?.id !== msg.songId) {
+      const matchingSong = player.queue.find((s) => s.id === msg.songId);
+      if (matchingSong) {
+        const idx = player.queue.indexOf(matchingSong);
+        player.play(matchingSong, undefined, idx, true, msg.position, msg.isPlaying);
+      } else {
+        this.requestHostState();
       }
-    } else if (driftMs > 8 && driftMs <= 140) {
-      player.audio.playbackRate = 0.993;
-    } else if (driftMs < -8 && driftMs >= -140) {
-      player.audio.playbackRate = 1.007;
-    } else if (Math.abs(driftMs) > 140) {
-      player.audio.currentTime = Math.max(0, expectedPosSec + (this.hardwareCalibrationMs / 1000));
+      return;
+    }
+
+    if (!player.audio || player.isLoading) return;
+
+    // 2. Strict Play/Pause matching (Host and Guest must always match!)
+    if (msg.isPlaying && !player.isPlaying) {
+      player.resume(true);
+    } else if (!msg.isPlaying && player.isPlaying) {
+      player.pause(true);
+      return;
+    }
+
+    if (!player.isPlaying) return;
+
+    // 3. Strictly maintain 1.0x playback rate (no audio resampling glitches or pitch wobbles)
+    if (player.audio.playbackRate !== 1.0) {
       player.audio.playbackRate = 1.0;
+    }
+
+    // 4. Remote smooth playback - zero stuttering!
+    // Never seek or disrupt the audio buffer for minor timing differences.
+    const diff = player.currentTime - msg.position;
+    this.driftMs = Math.round(diff * 1000);
+
+    // Only catch up if there was a severe gap (> 5 seconds) from e.g. network stall or call,
+    // with a minimum 10-second cooldown so it never stutters in a loop.
+    const now = Date.now();
+    if (Math.abs(diff) >= 5 && now - this.lastCatchUpSeek > 10000) {
+      this.lastCatchUpSeek = now;
+      player.audio.currentTime = msg.position;
+      player.currentTime = msg.position;
+    }
+  }
+
+  requestHostState() {
+    if (this.role === 'guest' && this.hostConnection?.open) {
+      this.hostConnection.send({ type: 'STATE_REQUEST' });
     }
   }
 
@@ -721,24 +648,22 @@ class JamStore {
 
       const msg: SyncHeartbeatMsg = {
         type: 'HEARTBEAT',
-        hostTime: performance.now(),
+        songId: player.currentSong.id,
         position: player.currentTime,
         isPlaying: player.isPlaying,
+        queueIndex: player.queueIndex,
       };
       this.broadcast(msg);
-    }, 1500);
+    }, 2500);
   }
 
-  broadcastPlay(song: Song, context: PlaybackContext, position = 0) {
+  broadcastPlay(song: Song, context?: PlaybackContext, position = 0) {
     if (this.role !== 'host' || this.connections.size === 0) return;
-
-    const targetHostTime = performance.now() + 450;
     const msg: SyncPlayMsg = {
       type: 'PLAY',
       song,
       context,
       position,
-      targetHostTime,
     };
     this.broadcast(msg);
   }
@@ -754,11 +679,9 @@ class JamStore {
 
   broadcastSeek(position: number) {
     if (this.role !== 'host' || this.connections.size === 0) return;
-    const targetHostTime = performance.now() + 400;
     const msg: SyncSeekMsg = {
       type: 'SEEK',
       position,
-      targetHostTime,
     };
     this.broadcast(msg);
   }
@@ -802,13 +725,9 @@ class JamStore {
       clearInterval(this.heartbeatInterval);
       this.heartbeatInterval = null;
     }
-    if (this.clockSyncInterval) {
-      clearInterval(this.clockSyncInterval);
-      this.clockSyncInterval = null;
-    }
-    if (this.scheduledTimer) {
-      clearTimeout(this.scheduledTimer);
-      this.scheduledTimer = null;
+    if (this.pingInterval) {
+      clearInterval(this.pingInterval);
+      this.pingInterval = null;
     }
 
     for (const [_, conn] of this.connections) {
@@ -838,7 +757,6 @@ class JamStore {
     this.members = [];
     this.driftMs = 0;
     this.rttMs = 0;
-    this.isClockSynced = false;
     this.errorMessage = '';
   }
 }

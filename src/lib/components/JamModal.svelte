@@ -45,11 +45,6 @@
     jamStore.leaveJam();
   }
 
-  function adjustCalibration(deltaMs: number) {
-    const next = Math.max(-100, Math.min(100, jamStore.hardwareCalibrationMs + deltaMs));
-    jamStore.setHardwareCalibration(next);
-  }
-
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === 'Escape' && shouldShow) {
       closeAll();
@@ -148,13 +143,15 @@
           <!-- Status Indicator -->
           <div class="flex items-center justify-between px-1 text-[11px] font-mono text-neutral-400">
             <div class="flex items-center gap-1.5">
-              <span class="w-1.5 h-1.5 rounded-full {Math.abs(jamStore.driftMs) <= 10 ? 'bg-emerald-400' : 'bg-amber-400'}"></span>
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
               <span class="text-white capitalize">{jamStore.role}</span>
               <span>•</span>
               <span>{jamStore.peerCount} {jamStore.peerCount === 1 ? 'device' : 'devices'}</span>
             </div>
-            {#if jamStore.driftMs !== 0}
-              <span class="text-neutral-500">{jamStore.driftMs > 0 ? '+' : ''}{jamStore.driftMs}ms</span>
+            {#if jamStore.rttMs > 0}
+              <span class="text-neutral-500">{jamStore.rttMs}ms ping</span>
+            {:else}
+              <span class="text-neutral-500">Connected</span>
             {/if}
           </div>
 
@@ -196,40 +193,6 @@
               />
             </label>
           {/if}
-
-          <!-- Acoustic Delay Calibration -->
-          <div class="flex items-center justify-between gap-1 p-1.5 rounded-xl bg-white/[0.03] border border-white/5">
-            <span class="text-[10px] font-mono text-neutral-500 px-1">Delay</span>
-            <div class="flex items-center gap-1">
-              <button
-                type="button"
-                onclick={() => adjustCalibration(-5)}
-                class="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-[10px] font-mono text-neutral-300 cursor-pointer"
-              >-5</button>
-              <button
-                type="button"
-                onclick={() => adjustCalibration(-1)}
-                class="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-[10px] font-mono text-neutral-300 cursor-pointer"
-              >-1</button>
-              <button
-                type="button"
-                onclick={() => jamStore.setHardwareCalibration(0)}
-                class="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-[10px] font-mono {jamStore.hardwareCalibrationMs === 0 ? 'text-neutral-400' : 'text-accent font-semibold'} cursor-pointer"
-              >
-                {jamStore.hardwareCalibrationMs >= 0 ? '+' : ''}{jamStore.hardwareCalibrationMs}ms
-              </button>
-              <button
-                type="button"
-                onclick={() => adjustCalibration(1)}
-                class="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-[10px] font-mono text-neutral-300 cursor-pointer"
-              >+1</button>
-              <button
-                type="button"
-                onclick={() => adjustCalibration(5)}
-                class="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-[10px] font-mono text-neutral-300 cursor-pointer"
-              >+5</button>
-            </div>
-          </div>
 
           <!-- Leave / End Jam -->
           <button

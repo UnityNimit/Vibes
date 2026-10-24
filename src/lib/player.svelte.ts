@@ -44,8 +44,6 @@ class PlayerState {
   onPlaybackChange: ((type: 'play' | 'pause' | 'seek', payload: any) => void) | null = null;
   jamDelegate: {
     isGuest: () => boolean;
-    getClockOffset?: () => number;
-    getHardwareCalibration?: () => number;
     onUserPlay?: (song: Song, context?: PlaybackContext) => boolean;
     onUserToggle?: () => boolean;
     onUserNext?: () => boolean;
@@ -227,8 +225,8 @@ class PlayerState {
     context?: { type: PlaybackSourceType; title: string; playlistId?: string; songs?: Song[] },
     startIndex?: number,
     fromSync = false,
-    syncTargetHostTime?: number,
-    syncStartPosition?: number
+    syncStartPosition?: number,
+    autoPlay = true
   ) {
     if (!fromSync && this.jamDelegate?.isGuest()) {
       const intercepted = this.jamDelegate.onUserPlay?.(
@@ -286,9 +284,25 @@ class PlayerState {
 
     // Check if clicked the same song
     if (this.currentSong?.id === song.id && this.audio.src) {
-      this.audio.play();
-      this.isPlaying = true;
+      if (syncStartPosition !== undefined && syncStartPosition > 0) {
+        this.audio.currentTime = syncStartPosition;
+        this.currentTime = syncStartPosition;
+      }
+      if (autoPlay) {
+        this.audio.play().catch(() => {});
+        this.isPlaying = true;
+      } else {
+        this.audio.pause();
+        this.isPlaying = false;
+      }
       this.syncMediaNotification('state');
+      if (!fromSync && this.onPlaybackChange) {
+        this.onPlaybackChange(autoPlay ? 'play' : 'pause', {
+          song: this.currentSong,
+          context: this.currentContext,
+          position: this.audio.currentTime,
+        });
+      }
       return;
     }
 
@@ -296,7 +310,7 @@ class PlayerState {
     this.syncMediaNotification('metadata');
     this.isLoading = true;
     this.autoCachedCurrent = false;
-    this.currentTime = 0;
+    this.currentTime = syncStartPosition && syncStartPosition > 0 ? syncStartPosition : 0;
     this.duration = 0;
     this.activeLyricIndex = -1;
     this.parsedLyrics = [];
@@ -349,20 +363,26 @@ class PlayerState {
         this.audio.src = streamRes.url;
       }
 
-      if (fromSync && syncTargetHostTime !== undefined) {
-        const offset = this.jamDelegate?.getClockOffset?.() || 0;
-        const cal = this.jamDelegate?.getHardwareCalibration?.() || 0;
-        const hostNow = performance.now() + offset;
-        const elapsedSec = Math.max(0, (hostNow - syncTargetHostTime - cal) / 1000);
-        const targetPos = (syncStartPosition || 0) + elapsedSec;
-        this.audio.currentTime = targetPos;
-        this.currentTime = targetPos;
+      if (syncStartPosition !== undefined && syncStartPosition > 0) {
+        this.audio.currentTime = syncStartPosition;
+        this.currentTime = syncStartPosition;
       }
 
-      await this.audio.play();
-      this.isPlaying = true;
+      if (autoPlay) {
+        await this.audio.play();
+        this.isPlaying = true;
+      } else {
+        this.audio.pause();
+        this.isPlaying = false;
+      }
+
+      this.syncMediaNotification('state');
       if (!fromSync && this.onPlaybackChange && this.currentSong) {
-        this.onPlaybackChange('play', { song: this.currentSong, context: this.currentContext, position: 0 });
+        this.onPlaybackChange('play', {
+          song: this.currentSong,
+          context: this.currentContext,
+          position: this.currentTime,
+        });
       }
     } catch (err) {
       console.error('Failed to get stream:', err);
@@ -389,21 +409,41 @@ class PlayerState {
     );
   }
 
-  togglePlay() {
-    if (this.jamDelegate?.isGuest()) {
+  pause(fromSync = false) {
+    if (!fromSync && this.jamDelegate?.isGuest()) {
+      if (this.jamDelegate.onUserToggle?.()) return;
+    }
+    if (!this.audio) return;
+    this.audio.pause();
+    this.isPlaying = false;
+    this.syncMediaNotification('state');
+    if (!fromSync && this.onPlaybackChange) {
+      this.onPlaybackChange('pause', { position: this.currentTime });
+    }
+  }
+
+  resume(fromSync = false) {
+    if (!fromSync && this.jamDelegate?.isGuest()) {
       if (this.jamDelegate.onUserToggle?.()) return;
     }
     if (!this.audio || !this.currentSong) return;
+    this.audio.play().catch((err) => console.warn('Audio resume failed:', err));
+    this.isPlaying = true;
+    this.syncMediaNotification('state');
+    if (!fromSync && this.onPlaybackChange) {
+      this.onPlaybackChange('play', {
+        song: this.currentSong,
+        context: this.currentContext,
+        position: this.currentTime,
+      });
+    }
+  }
+
+  togglePlay() {
     if (this.isPlaying) {
-      this.audio.pause();
-      if (this.onPlaybackChange) {
-        this.onPlaybackChange('pause', { position: this.currentTime });
-      }
+      this.pause();
     } else {
-      this.audio.play();
-      if (this.onPlaybackChange) {
-        this.onPlaybackChange('play', { song: this.currentSong, context: this.currentContext, position: this.currentTime });
-      }
+      this.resume();
     }
   }
 
@@ -541,7 +581,15 @@ class PlayerState {
     }
     if (this.repeatMode === 'one') {
       this.seek(0);
-      this.audio?.play();
+      this.audio?.play().catch(() => {});
+      this.isPlaying = true;
+      if (this.onPlaybackChange && this.currentSong) {
+        this.onPlaybackChange('play', {
+          song: this.currentSong,
+          context: this.currentContext,
+          position: 0,
+        });
+      }
     } else {
       this.next();
     }
