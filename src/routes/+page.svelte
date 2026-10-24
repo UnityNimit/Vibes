@@ -21,6 +21,9 @@
 
   onMount(() => {
     isMobileAndroid = isAndroid();
+    if (isMobileAndroid) {
+      document.documentElement.classList.add('is-mobile-android');
+    }
   });
 
   function handleSelectTab(tab: Tab) {

@@ -108,6 +108,22 @@
   ::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.25);
   }
+
+  /* Completely remove all scrollbars on Android version for maximum screen estate & ultra-clean UI */
+  .is-mobile-android ::-webkit-scrollbar,
+  .is-mobile-android *::-webkit-scrollbar,
+  .is-mobile-android::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+    background: transparent !important;
+  }
+
+  .is-mobile-android,
+  .is-mobile-android * {
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
 }
 
 .bg-accent {

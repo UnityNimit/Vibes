@@ -22,42 +22,6 @@
     isMobileAndroid = isAndroid();
   });
 
-  let mobileProgressEl = $state<HTMLDivElement | null>(null);
-  let isDraggingProgress = $state(false);
-
-  let progressPercent = $derived(
-    player.duration > 0 ? Math.min(100, Math.max(0, (player.currentTime / player.duration) * 100)) : 0
-  );
-
-  function seekToProgressEvent(clientX: number) {
-    if (!mobileProgressEl || !player.duration) return;
-    const rect = mobileProgressEl.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    player.seek(ratio * player.duration);
-  }
-
-  function handleProgressPointerDown(e: PointerEvent) {
-    isDraggingProgress = true;
-    seekToProgressEvent(e.clientX);
-
-    const onPointerMove = (ev: PointerEvent) => {
-      if (isDraggingProgress) {
-        seekToProgressEvent(ev.clientX);
-      }
-    };
-
-    const onPointerUp = () => {
-      isDraggingProgress = false;
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerUp);
-    };
-
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
-  }
-
   let showPlaylistMenu = $state(false);
   let showCreateInput = $state(false);
   let newPlaylistInput = $state('');
@@ -190,23 +154,18 @@
     class="fixed bottom-0 left-0 right-0 z-40 h-20 bg-black/95 backdrop-blur-2xl px-4 sm:px-6 flex items-center justify-between select-none shadow-2xl transition-all duration-300 font-sans overflow-visible"
   >
     {#if isMobileAndroid}
-      <!-- Top Edge Progress Bar for Android (Starts at 84px to avoid the poked-out vinyl disc) -->
-      <!-- svelte-ignore a11y_click_events_have_key_events -->
-      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <!-- Top Edge Animated Wave Progress Bar for Android (Starts at 84px to avoid the poked-out vinyl disc) -->
       <div
-        bind:this={mobileProgressEl}
-        onpointerdown={handleProgressPointerDown}
-        class="absolute top-0 right-0 h-4 -translate-y-2 flex items-center cursor-pointer group z-30 select-none"
+        class="absolute top-0 right-0 h-4 -translate-y-2 flex items-center z-30 select-none overflow-hidden"
         style="left: 84px;"
       >
-        <!-- Background Track -->
-        <div class="w-full h-[2.5px] bg-white/15 rounded-full overflow-hidden relative">
-          <!-- Progress Fill -->
-          <div
-            class="h-full bg-accent rounded-full transition-all duration-75"
-            style="width: {progressPercent}%;"
-          ></div>
-        </div>
+        <WaveProgressBar
+          height={16}
+          amplitude={2.0}
+          wavelength={18}
+          thumbRadius={3.5}
+          class="w-full"
+        />
       </div>
 
       <!-- Android Mobile Bottom Player Layout -->

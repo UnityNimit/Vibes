@@ -10,6 +10,7 @@
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import RepeatIcon from './RepeatIcon.svelte';
+  import WaveProgressBar from './WaveProgressBar.svelte';
   import type { SearchPage, Song } from '../types';
 
   interface Props {
@@ -26,14 +27,8 @@
 
   let showSimilarMobile = $state(false);
   let showMobilePlaylistMenu = $state(false);
+  let isCreatingPlaylist = $state(false);
   let newPlaylistInput = $state('');
-
-  let mobileScrubberEl = $state<HTMLDivElement | null>(null);
-  let isDraggingScrubber = $state(false);
-
-  let progressPercent = $derived(
-    player.duration > 0 ? Math.min(100, Math.max(0, (player.currentTime / player.duration) * 100)) : 0
-  );
 
   let isCurrentSongInAnyPlaylist = $derived(
     player.currentSong ? playlistStore.isSongInAnyPlaylist(player.currentSong.id) : false
@@ -47,35 +42,6 @@
       await playlistStore.toggleSong(pl.id, player.currentSong);
     }
     newPlaylistInput = '';
-  }
-
-  function seekToScrubberEvent(clientX: number) {
-    if (!mobileScrubberEl || !player.duration) return;
-    const rect = mobileScrubberEl.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
-    player.seek(ratio * player.duration);
-  }
-
-  function handleScrubberPointerDown(e: PointerEvent) {
-    isDraggingScrubber = true;
-    seekToScrubberEvent(e.clientX);
-
-    const onPointerMove = (ev: PointerEvent) => {
-      if (isDraggingScrubber) {
-        seekToScrubberEvent(ev.clientX);
-      }
-    };
-
-    const onPointerUp = () => {
-      isDraggingScrubber = false;
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerUp);
-    };
-
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerUp);
   }
 
   let lyricsContainerEl = $state<HTMLDivElement | null>(null);
@@ -511,65 +477,76 @@
         </div>
       </div>
 
-      <!-- Below Art: Song Name & Artist -->
-      <div class="w-full max-w-sm px-4 flex flex-col items-start min-w-0 flex-shrink-0">
-        <!-- Song Name -->
-        <div class="relative w-full overflow-hidden">
-          {#if isTitleOverflowing}
-            <div
-              class="flex items-center gap-8 whitespace-nowrap marquee-track"
-              style="animation-duration: {marqueeTitleDuration}s;"
-            >
-              <h2 class="text-xl sm:text-2xl font-bold text-white tracking-tight leading-tight">{cleanTitle}</h2>
-              <h2 class="text-xl sm:text-2xl font-bold text-white tracking-tight leading-tight">{cleanTitle}</h2>
-            </div>
-          {:else}
-            <h2 class="text-xl sm:text-2xl font-bold text-white tracking-tight truncate w-full leading-tight">
-              {cleanTitle}
-            </h2>
-          {/if}
+      <!-- Below Art: Song Name & Artist on Left, Download Button on Right Edge -->
+      <div class="w-full max-w-sm px-4 flex items-center justify-between min-w-0 flex-shrink-0">
+        <!-- Title & Artist -->
+        <div class="flex-1 min-w-0 pr-3 flex flex-col items-start">
+          <!-- Song Name -->
+          <div class="relative w-full overflow-hidden">
+            {#if isTitleOverflowing}
+              <div
+                class="flex items-center gap-8 whitespace-nowrap marquee-track"
+                style="animation-duration: {marqueeTitleDuration}s;"
+              >
+                <h2 class="text-xl sm:text-2xl font-bold text-white tracking-tight leading-tight">{cleanTitle}</h2>
+                <h2 class="text-xl sm:text-2xl font-bold text-white tracking-tight leading-tight">{cleanTitle}</h2>
+              </div>
+            {:else}
+              <h2 class="text-xl sm:text-2xl font-bold text-white tracking-tight truncate w-full leading-tight">
+                {cleanTitle}
+              </h2>
+            {/if}
+          </div>
+
+          <!-- Artist Name -->
+          <div class="relative w-full overflow-hidden mt-1">
+            {#if isArtistOverflowing}
+              <div
+                class="flex items-center gap-8 whitespace-nowrap marquee-track"
+                style="animation-duration: {marqueeArtistDuration}s;"
+              >
+                <p class="text-sm font-medium text-neutral-400 leading-tight">{cleanArtist}</p>
+                <p class="text-sm font-medium text-neutral-400 leading-tight">{cleanArtist}</p>
+              </div>
+            {:else}
+              <p class="text-sm font-medium text-neutral-400 truncate w-full leading-tight">
+                {cleanArtist}
+              </p>
+            {/if}
+          </div>
         </div>
 
-        <!-- Artist Name -->
-        <div class="relative w-full overflow-hidden mt-1">
-          {#if isArtistOverflowing}
-            <div
-              class="flex items-center gap-8 whitespace-nowrap marquee-track"
-              style="animation-duration: {marqueeArtistDuration}s;"
-            >
-              <p class="text-sm font-medium text-neutral-400 leading-tight">{cleanArtist}</p>
-              <p class="text-sm font-medium text-neutral-400 leading-tight">{cleanArtist}</p>
-            </div>
+        <!-- Download Button on the Right Edge -->
+        <button
+          type="button"
+          onclick={() => player.toggleDownload()}
+          disabled={player.isDownloading}
+          class="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-all cursor-pointer active:scale-90 {player.isCached ? 'text-accent' : 'text-neutral-400 hover:text-white'}"
+          aria-label="Download song"
+        >
+          {#if player.isDownloading}
+            <div class="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+          {:else if player.isCached}
+            <svg class="w-6 h-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
           {:else}
-            <p class="text-sm font-medium text-neutral-400 truncate w-full leading-tight">
-              {cleanArtist}
-            </p>
+            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
           {/if}
-        </div>
+        </button>
       </div>
 
-      <!-- Below Artist: Progress Line (Scrubber) -->
-      <div class="w-full max-w-sm px-4 mt-4 flex flex-col gap-1.5 flex-shrink-0">
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          bind:this={mobileScrubberEl}
-          onpointerdown={handleScrubberPointerDown}
-          class="relative w-full h-5 flex items-center cursor-pointer select-none group"
-        >
-          <!-- Background Track -->
-          <div class="w-full h-[3px] bg-white/20 rounded-full overflow-hidden relative">
-            <!-- Progress Bar -->
-            <div
-              class="h-full bg-white rounded-full"
-              style="width: {progressPercent}%;"
-            ></div>
-          </div>
-          <!-- Scrubber Thumb -->
-          <div
-            class="absolute w-3.5 h-3.5 bg-white rounded-full shadow-md -translate-x-1/2 pointer-events-none transition-transform group-active:scale-125"
-            style="left: {progressPercent}%;"
-          ></div>
-        </div>
+      <!-- Below Artist: Animated Wave Progress Bar & Time Stamps -->
+      <div class="w-full max-w-sm px-4 mt-3 flex flex-col gap-1.5 flex-shrink-0">
+        <WaveProgressBar
+          height={24}
+          amplitude={3.0}
+          wavelength={24}
+          thumbRadius={5}
+          class="w-full"
+        />
 
         <!-- Below Progress Line: Time Stamps -->
         <div class="flex items-center justify-between text-xs font-mono text-neutral-400 select-none px-0.5">
@@ -580,7 +557,7 @@
 
       <!-- Below Time Stamps: Main 5 Controls -->
       <div class="w-full max-w-sm px-4 mt-2 flex items-center justify-between select-none flex-shrink-0">
-        <!-- Heart / Like -->
+        <!-- 1. Heart / Like -->
         <button
           onclick={() => player.toggleLike()}
           class="w-11 h-11 rounded-full flex items-center justify-center text-neutral-400 active:scale-90 transition-all cursor-pointer {player.isLiked ? 'text-accent' : ''}"
@@ -591,7 +568,7 @@
           </svg>
         </button>
 
-        <!-- Previous Track -->
+        <!-- 2. Previous Track -->
         <button
           onclick={() => player.prev()}
           class="w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-90 transition-all cursor-pointer"
@@ -602,7 +579,7 @@
           </svg>
         </button>
 
-        <!-- Play / Pause (Large Center Button) -->
+        <!-- 3. Play / Pause (Large Center Button) -->
         <button
           onclick={() => player.togglePlay()}
           class="relative w-16 h-16 rounded-full bg-white text-black flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-xl flex-shrink-0"
@@ -621,7 +598,7 @@
           {/if}
         </button>
 
-        <!-- Next Track -->
+        <!-- 4. Next Track -->
         <button
           onclick={() => player.next()}
           class="w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-90 transition-all cursor-pointer"
@@ -632,7 +609,7 @@
           </svg>
         </button>
 
-        <!-- Repeat / Shuffle Mode -->
+        <!-- 5. Repeat / Shuffle Mode -->
         <button
           onclick={() => player.toggleRepeat()}
           class="w-11 h-11 rounded-full flex items-center justify-center text-neutral-400 active:scale-90 transition-all cursor-pointer {player.repeatMode !== 'off' ? 'text-accent' : ''}"
@@ -642,188 +619,173 @@
         </button>
       </div>
 
-      <!-- Below Main 5 Controls: Playlist and Download Buttons -->
-      <div class="w-full max-w-xs px-8 mt-3 flex items-center justify-between text-neutral-400 select-none flex-shrink-0">
-        <!-- Add to Playlist -->
+      <!-- Bottom Center: Playlist Button -->
+      <div class="w-full max-w-xs mt-3 flex items-center justify-center select-none flex-shrink-0">
         <button
+          type="button"
           onclick={() => (showMobilePlaylistMenu = true)}
-          class="p-3 rounded-full flex items-center justify-center transition-colors cursor-pointer active:scale-90 {isCurrentSongInAnyPlaylist ? 'text-accent' : 'text-neutral-400 hover:text-white'}"
+          class="w-12 h-12 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-90 {isCurrentSongInAnyPlaylist ? 'text-accent' : 'text-neutral-400 hover:text-white'}"
           aria-label="Add to playlist"
         >
           <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h10" />
           </svg>
         </button>
-
-        <!-- Download / Saved -->
-        <button
-          onclick={() => player.toggleDownload()}
-          disabled={player.isDownloading}
-          class="p-3 rounded-full flex items-center justify-center transition-colors cursor-pointer active:scale-90 {player.isCached ? 'text-accent' : 'text-neutral-400 hover:text-white'}"
-          aria-label="Download song"
-        >
-          {#if player.isDownloading}
-            <div class="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-          {:else if player.isCached}
-            <svg class="w-6 h-6 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-            </svg>
-          {:else}
-            <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-          {/if}
-        </button>
       </div>
 
-      <!-- Slide-over Similar Songs List (Opened by Top Right Arrow) -->
-      {#if showSimilarMobile}
-        <div
-          class="absolute inset-0 bg-black z-40 flex flex-col transition-all duration-300"
-          style="padding-top: max(env(safe-area-inset-top, 36px), 36px);"
-        >
-          <!-- Header with Back Button -->
-          <div class="w-full flex items-center justify-between px-5 pt-3 pb-3 border-b border-white/10 flex-shrink-0">
-            <div class="flex items-center gap-2">
-              <button
-                onclick={() => (showSimilarMobile = false)}
-                class="p-2 -ml-2 text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer"
-                aria-label="Back to player"
-              >
-                <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-                </svg>
-              </button>
-              <span class="text-base font-semibold text-white">Similar Vibes</span>
-            </div>
-            <span class="text-xs font-mono text-neutral-500">
-              {displayedSongs.length} tracks
-            </span>
+      <!-- Slide-over Similar Songs List (Sliding in from Right with Pure Black Background) -->
+      <div
+        class="absolute inset-0 bg-black z-40 flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] {showSimilarMobile ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none'}"
+        style="padding-top: max(env(safe-area-inset-top, 36px), 36px);"
+      >
+        <!-- Header with Back Button -->
+        <div class="w-full flex items-center justify-between px-5 pt-3 pb-3 border-b border-white/10 flex-shrink-0">
+          <div class="flex items-center gap-2">
+            <button
+              type="button"
+              onclick={() => (showSimilarMobile = false)}
+              class="p-2 -ml-2 text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer"
+              aria-label="Back to player"
+            >
+              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+            <span class="text-base font-semibold text-white">Similar Vibes</span>
           </div>
+          <span class="text-xs font-mono text-neutral-500">
+            {displayedSongs.length} tracks
+          </span>
+        </div>
 
-          <!-- Scrollable Similar Songs List -->
-          <div
-            bind:this={similarScrollEl}
-            onscroll={handleSimilarScroll}
-            class="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-1.5 no-scrollbar"
-          >
-            {#if player.currentContext.type === 'search' && isLoadingSimilar}
-              <div class="flex flex-col items-center justify-center py-24 gap-3 text-neutral-500">
-                <div class="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-                <span class="text-xs font-mono tracking-wider">TUNING INTO SIMILAR VIBES...</span>
+        <!-- Scrollable Similar Songs List -->
+        <div
+          bind:this={similarScrollEl}
+          onscroll={handleSimilarScroll}
+          class="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-1.5 no-scrollbar"
+        >
+          {#if player.currentContext.type === 'search' && isLoadingSimilar}
+            <div class="flex flex-col items-center justify-center py-24 gap-3 text-neutral-500">
+              <div class="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
+              <span class="text-xs font-mono tracking-wider">TUNING INTO SIMILAR VIBES...</span>
+            </div>
+          {:else if displayedSongs.length > 0}
+            {#each displayedSongs as song, i}
+              {@const isPlayingThis = player.currentSong?.id === song.id}
+              <div
+                role="button"
+                tabindex="0"
+                data-song-id={song.id}
+                onclick={() => playRightColumnSong(song, i)}
+                onkeydown={(e) => { if (e.key === 'Enter') playRightColumnSong(song, i); }}
+                class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group {isPlayingThis ? 'bg-accent/15' : 'active:bg-white/10'}"
+              >
+                <div class="w-12 h-12 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
+                  <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h4 class="text-sm font-medium truncate {isPlayingThis ? 'text-accent' : 'text-white'}">
+                    {song.title}
+                  </h4>
+                  <p class="text-xs text-neutral-400 truncate mt-0.5">
+                    {song.artist}
+                  </p>
+                </div>
+                {#if isPlayingThis && player.isPlaying}
+                  <PlayingEqualizer isPlaying={player.isPlaying} />
+                {:else}
+                  <span class="text-xs text-neutral-500 font-mono flex-shrink-0">
+                    {song.duration}
+                  </span>
+                {/if}
               </div>
-            {:else if displayedSongs.length > 0}
-              {#each displayedSongs as song, i}
-                {@const isPlayingThis = player.currentSong?.id === song.id}
-                <div
-                  role="button"
-                  tabindex="0"
-                  data-song-id={song.id}
-                  onclick={() => playRightColumnSong(song, i)}
-                  onkeydown={(e) => { if (e.key === 'Enter') playRightColumnSong(song, i); }}
-                  class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group {isPlayingThis ? 'bg-accent/15' : 'active:bg-white/10'}"
-                >
-                  <div class="w-12 h-12 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
-                    <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" />
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <h4 class="text-sm font-medium truncate {isPlayingThis ? 'text-accent' : 'text-white'}">
-                      {song.title}
-                    </h4>
-                    <p class="text-xs text-neutral-400 truncate mt-0.5">
-                      {song.artist}
-                    </p>
-                  </div>
-                  {#if isPlayingThis && player.isPlaying}
-                    <PlayingEqualizer isPlaying={player.isPlaying} />
-                  {:else}
-                    <span class="text-xs text-neutral-500 font-mono flex-shrink-0">
-                      {song.duration}
-                    </span>
-                  {/if}
-                </div>
-              {/each}
-              {#if player.currentContext.type === 'search' && isLoadingMoreSimilar}
-                <div class="py-4 flex items-center justify-center w-full">
-                  <div class="w-4 h-4 border-2 border-white/20 border-t-accent rounded-full animate-spin"></div>
-                </div>
-              {/if}
-            {:else}
-              <div class="py-20 text-center text-xs font-mono text-neutral-500">
-                NO TRACKS FOUND
+            {/each}
+            {#if player.currentContext.type === 'search' && isLoadingMoreSimilar}
+              <div class="py-4 flex items-center justify-center w-full">
+                <div class="w-4 h-4 border-2 border-white/20 border-t-accent rounded-full animate-spin"></div>
               </div>
             {/if}
-          </div>
-        </div>
-      {/if}
-
-      <!-- Mobile Playlist Bottom Sheet -->
-      {#if showMobilePlaylistMenu}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-end justify-center"
-          onclick={() => (showMobilePlaylistMenu = false)}
-        >
-          <div
-            class="w-full max-w-md bg-[#121216] border-t border-white/10 rounded-t-3xl p-5 flex flex-col gap-3 max-h-[70vh] shadow-2xl"
-            onclick={(e) => e.stopPropagation()}
-          >
-            <div class="flex items-center justify-between pb-2 border-b border-white/10">
-              <span class="text-sm font-bold text-white uppercase tracking-wider">Playlists</span>
-              <button
-                onclick={() => (showMobilePlaylistMenu = false)}
-                class="text-neutral-400 hover:text-white p-1 cursor-pointer"
-                aria-label="Close playlist menu"
-              >
-                <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+          {:else}
+            <div class="py-20 text-center text-xs font-mono text-neutral-500">
+              NO TRACKS FOUND
             </div>
+          {/if}
+        </div>
+      </div>
 
-            <div class="flex gap-2">
+      <!-- Mobile Playlist Bottom Sheet (Smooth Slide-Up Card with Pure Black Background) -->
+      <!-- svelte-ignore a11y_click_events_have_key_events -->
+      <!-- svelte-ignore a11y_no_static_element_interactions -->
+      <div
+        class="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end justify-center transition-opacity duration-300 {showMobilePlaylistMenu ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}"
+        onclick={() => { showMobilePlaylistMenu = false; isCreatingPlaylist = false; }}
+      >
+        <div
+          class="w-full max-w-md bg-black border-t border-white/10 rounded-t-3xl p-5 pb-8 flex flex-col gap-3 max-h-[70vh] shadow-[0_-16px_48px_rgba(0,0,0,0.9)] transform transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] {showMobilePlaylistMenu ? 'translate-y-0' : 'translate-y-full'}"
+          onclick={(e) => e.stopPropagation()}
+        >
+          <!-- Minimalist Top Bar: Just the Plus Button to add a new playlist -->
+          <div class="flex items-center justify-end w-full">
+            <button
+              type="button"
+              onclick={() => (isCreatingPlaylist = !isCreatingPlaylist)}
+              class="w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 flex items-center justify-center text-white transition-all cursor-pointer"
+              aria-label="Add new playlist"
+            >
+              <svg class="w-5 h-5 transition-transform duration-200 {isCreatingPlaylist ? 'rotate-45' : ''}" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+            </button>
+          </div>
+
+          {#if isCreatingPlaylist}
+            <form
+              onsubmit={(e) => { e.preventDefault(); handleCreatePlaylistMobile(); isCreatingPlaylist = false; }}
+              class="flex items-center gap-2"
+            >
               <input
                 type="text"
                 bind:value={newPlaylistInput}
-                placeholder="New playlist name..."
-                class="flex-1 bg-white/10 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-accent"
+                placeholder="Playlist name..."
+                class="flex-1 bg-white/[0.07] border border-white/15 rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-white/40 font-sans"
               />
               <button
-                onclick={handleCreatePlaylistMobile}
-                class="px-4 py-2 rounded-xl bg-accent text-accent-contrast font-medium text-xs active:scale-95 transition-all cursor-pointer"
+                type="submit"
+                disabled={!newPlaylistInput.trim()}
+                class="px-4 py-2.5 rounded-xl bg-white text-black font-semibold text-xs active:scale-95 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer font-sans"
               >
-                Create
+                Add
               </button>
-            </div>
+            </form>
+          {/if}
 
-            <div class="flex-1 overflow-y-auto flex flex-col gap-1 max-h-60 no-scrollbar">
-              {#if playlistStore.playlists.length === 0}
-                <p class="text-center py-6 text-xs font-mono text-neutral-500">NO PLAYLISTS YET</p>
-              {:else}
-                {#each playlistStore.playlists as pl}
-                  {@const inPl = player.currentSong ? playlistStore.isSongInPlaylist(pl.id, player.currentSong.id) : false}
-                  <button
-                    type="button"
-                    onclick={() => player.currentSong && playlistStore.toggleSong(pl.id, player.currentSong)}
-                    class="flex items-center justify-between w-full px-3 py-3 rounded-xl hover:bg-white/5 active:bg-white/10 transition-colors cursor-pointer text-left"
-                  >
-                    <div class="flex-1 min-w-0 pr-2">
-                      <p class="text-sm font-medium text-white truncate">{pl.name}</p>
-                      <p class="text-[11px] font-mono text-neutral-500">{pl.songs.length} tracks</p>
-                    </div>
-                    {#if inPl}
-                      <svg class="w-5 h-5 text-accent flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                    {/if}
-                  </button>
-                {/each}
-              {/if}
-            </div>
+          <!-- Playlists List -->
+          <div class="flex-1 overflow-y-auto flex flex-col gap-1 max-h-60 no-scrollbar">
+            {#if playlistStore.playlists.length === 0}
+              <p class="text-center py-6 text-xs font-mono text-neutral-600">NO PLAYLISTS YET</p>
+            {:else}
+              {#each playlistStore.playlists as pl}
+                {@const inPl = player.currentSong ? playlistStore.isSongInPlaylist(pl.id, player.currentSong.id) : false}
+                <button
+                  type="button"
+                  onclick={() => player.currentSong && playlistStore.toggleSong(pl.id, player.currentSong)}
+                  class="flex items-center justify-between w-full px-3.5 py-3 rounded-2xl hover:bg-white/[0.04] active:bg-white/[0.08] transition-colors cursor-pointer text-left {inPl ? 'bg-white/[0.06]' : ''}"
+                >
+                  <div class="flex-1 min-w-0 pr-3">
+                    <p class="text-sm font-medium {inPl ? 'text-accent' : 'text-white'} truncate">{pl.name}</p>
+                    <p class="text-[11px] font-mono text-neutral-500 mt-0.5">{pl.songs.length} tracks</p>
+                  </div>
+                  {#if inPl}
+                    <svg class="w-5 h-5 text-accent flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                      <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                  {/if}
+                </button>
+              {/each}
+            {/if}
           </div>
         </div>
-      {/if}
+      </div>
     </div>
   {:else}
     <div class="my-auto flex flex-col items-center justify-center text-center gap-2">
