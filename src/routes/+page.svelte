@@ -79,7 +79,7 @@
 
 <div
   class="w-screen h-screen flex flex-col bg-black text-neutral-200 overflow-hidden font-sans select-none border-none relative"
-  style={isMobileAndroid ? 'padding-top: max(env(safe-area-inset-top, 36px), 36px);' : ''}
+  style={isMobileAndroid ? 'padding-top: max(env(safe-area-inset-top, 28px), 28px);' : ''}
 >
   <!-- Custom Monochromatic Window Titlebar (No bottom border, pure black) -->
   <TopBar {currentTab} />

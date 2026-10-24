@@ -9,9 +9,9 @@
   let { currentTab, onSelectTab }: Props = $props();
 </script>
 
-<aside class="w-16 h-full bg-black border-none flex flex-col items-center pt-0 pb-28 select-none flex-shrink-0 font-sans z-30">
+<aside class="w-12 sm:w-16 h-full bg-black border-none flex flex-col items-center pt-2 sm:pt-3 pb-28 select-none flex-shrink-0 font-sans z-30">
   <!-- Navigation Icons (Icon-Only, Clean Color-Only Selection, No Containers) -->
-  <nav class="flex flex-col items-center gap-3 w-full px-2">
+  <nav class="flex flex-col items-center gap-2.5 sm:gap-3 w-full px-1 sm:px-2">
     <!-- Search Tab -->
     <button
       onclick={() => onSelectTab('search')}
@@ -64,16 +64,21 @@
     <button
       type="button"
       onclick={() => jamStore.toggleModal()}
-      class="relative w-10 h-10 flex items-center justify-center transition-colors duration-150 cursor-pointer {jamStore.status === 'connected' ? 'text-accent' : 'text-neutral-500 hover:text-white'}"
+      class="relative w-10 h-10 flex items-center justify-center transition-colors duration-150 cursor-pointer overflow-visible {jamStore.status === 'connected' ? 'text-accent' : 'text-neutral-500 hover:text-white'}"
       title={jamStore.status === 'connected' ? `Jamming in Room ${jamStore.roomCode}` : 'Jam Session'}
       aria-label="Jam Session"
     >
-      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+      {#if jamStore.status === 'connected'}
+        <!-- Smooth GPU-accelerated circular wave emission -->
+        <div class="jam-wave-emitter">
+          <span class="jam-wave-circle jam-wave-delay-1"></span>
+          <span class="jam-wave-circle jam-wave-delay-2"></span>
+          <span class="jam-wave-circle jam-wave-delay-3"></span>
+        </div>
+      {/if}
+      <svg class="relative z-10 w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
         <path stroke-linecap="round" stroke-linejoin="round" d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894a9.75 9.75 0 010-13.788m13.788 0a9.75 9.75 0 010 13.788M12 12h.008v.008H12V12z" />
       </svg>
-      {#if jamStore.status === 'connected'}
-        <span class="absolute top-2 right-2 w-1.5 h-1.5 rounded-full bg-accent"></span>
-      {/if}
     </button>
 
     <!-- Settings Tab (Directly below Jam) -->

@@ -114,12 +114,12 @@
   }
 </script>
 
-<div class="flex-1 h-full overflow-y-auto px-3.5 sm:px-6 pt-3 pb-28 flex flex-col gap-5 select-none font-sans bg-black w-full smooth-scroll-container">
+<div class="flex-1 h-full overflow-y-auto px-3 sm:px-6 pt-2 sm:pt-3 pb-28 flex flex-col gap-5 select-none font-sans bg-black w-full smooth-scroll-container">
   {#if selectedPlaylist}
     <!-- Detail View: Single Playlist -->
     <div class="flex flex-col gap-6 w-full">
       <!-- Back Navigation Bar -->
-      <div class="flex items-center justify-between w-full">
+      <div class="flex items-center justify-between min-h-10 w-full">
         <button
           onclick={() => { selectedPlaylistId = null; isRenaming = false; }}
           class="flex items-center gap-2 text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer"
@@ -366,7 +366,7 @@
     </div>
   {:else}
     <!-- Overview: Grid of Playlists -->
-    <div class="flex items-center justify-between -mb-2 w-full select-none">
+    <div class="flex items-center justify-between min-h-10 -mb-2 w-full select-none">
       <p class="text-xs text-neutral-500 font-mono">
         {playlistStore.playlists.length} {playlistStore.playlists.length === 1 ? 'playlist' : 'playlists'}
       </p>

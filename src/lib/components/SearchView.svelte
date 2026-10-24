@@ -32,11 +32,31 @@
   let activeDragEl: HTMLElement | null = null;
   let didDrag = false;
 
+  let historyTouchTimer: ReturnType<typeof setTimeout> | null = null;
+  let activeHistoryItem = $state<string | null>(null);
+
+  function handleHistoryTouchStart(item: string) {
+    if (historyTouchTimer) clearTimeout(historyTouchTimer);
+    historyTouchTimer = setTimeout(() => {
+      activeHistoryItem = item;
+    }, 350);
+  }
+
+  function handleHistoryTouchEnd() {
+    if (historyTouchTimer) {
+      clearTimeout(historyTouchTimer);
+      historyTouchTimer = null;
+    }
+  }
+
   onMount(() => {
     isMobileAndroid = isAndroid();
     if (feedStore.recommendedSongs.length === 0) {
       feedStore.refreshAllFeeds();
     }
+    return () => {
+      if (historyTouchTimer) clearTimeout(historyTouchTimer);
+    };
   });
 
   function handleHorizontalScroll(section: 'recommended' | 'trending' | 'new' | 'old', e: Event) {
@@ -257,11 +277,11 @@
 <div
   bind:this={scrollContainerEl}
   onscroll={handleScroll}
-  class="flex-1 h-full overflow-y-auto px-3.5 sm:px-6 pt-3 pb-28 flex flex-col gap-6 select-none font-sans bg-black w-full smooth-scroll-container"
+  class="flex-1 h-full overflow-y-auto px-3 sm:px-6 pt-2 sm:pt-3 pb-28 flex flex-col gap-5 sm:gap-6 select-none font-sans bg-black w-full smooth-scroll-container"
 >
   <!-- Search Input Bar & Recommendations -->
   <div class="flex flex-col gap-3 w-full">
-    <div class="relative w-full">
+    <div class="relative w-full h-10">
       <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-500">
         <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
@@ -274,7 +294,7 @@
         value={query}
         oninput={handleInput}
         onkeydown={handleKeyDown}
-        class="w-full bg-[#0e0e11] text-white pl-10 pr-10 py-3 rounded-xl border-none outline-none focus:outline-none focus:ring-0 focus:border-none focus-visible:outline-none text-xs sm:text-sm font-normal transition-colors placeholder:text-neutral-500 font-sans shadow-none"
+        class="w-full h-10 bg-[#0e0e11] text-white pl-10 pr-10 rounded-xl border-none outline-none focus:outline-none focus:ring-0 focus:border-none focus-visible:outline-none text-xs sm:text-sm font-normal transition-colors placeholder:text-neutral-500 font-sans shadow-none"
       />
 
       {#if query}
@@ -291,20 +311,32 @@
       {/if}
     </div>
 
-    <!-- Recent Search History Pills (Sleek, minimal pills; no popup needed) -->
+    <!-- Recent Search History Pills (Sleek, minimal pills; cross button layered directly over text) -->
     {#if feedStore.recentSearches.length > 0}
       <div class="flex flex-wrap gap-1.5 items-center pt-0.5">
         {#each feedStore.recentSearches.slice(0, 10) as item}
-          <div class="inline-flex items-center rounded-lg bg-[#0e0e11] hover:bg-[#16161c] text-xs text-neutral-300 hover:text-white transition-colors group">
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="relative inline-flex items-center rounded-lg bg-[#0e0e11] hover:bg-[#16161c] text-xs text-neutral-300 hover:text-white transition-colors group select-none"
+            ontouchstart={() => handleHistoryTouchStart(item)}
+            ontouchend={handleHistoryTouchEnd}
+            ontouchcancel={handleHistoryTouchEnd}
+          >
             <button
+              type="button"
               onclick={() => search(item)}
               class="px-2.5 py-1 text-xs text-neutral-300 group-hover:text-white border-none bg-transparent font-normal cursor-pointer"
             >
               {item}
             </button>
             <button
-              onclick={(e) => { e.stopPropagation(); feedStore.removeSearch(item); }}
-              class="opacity-0 group-hover:opacity-100 text-neutral-500 hover:text-white pr-2 pl-0.5 py-1 bg-transparent border-none cursor-pointer transition-opacity text-[11px]"
+              type="button"
+              onclick={(e) => {
+                e.stopPropagation();
+                feedStore.removeSearch(item);
+                if (activeHistoryItem === item) activeHistoryItem = null;
+              }}
+              class="absolute right-0.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-neutral-900/90 hover:bg-neutral-800 text-neutral-400 hover:text-white flex items-center justify-center transition-all duration-150 cursor-pointer border border-white/10 shadow-sm text-[9px] z-10 active:scale-90 {activeHistoryItem === item ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto group-focus-within:opacity-100 group-focus-within:pointer-events-auto'}"
               title={`Remove ${item} from history`}
               aria-label={`Remove ${item}`}
             >
@@ -313,7 +345,11 @@
           </div>
         {/each}
         <button
-          onclick={() => feedStore.clearRecentSearches()}
+          type="button"
+          onclick={() => {
+            activeHistoryItem = null;
+            feedStore.clearRecentSearches();
+          }}
           class="px-2 py-1 text-[11px] text-neutral-500 hover:text-neutral-300 bg-transparent border-none cursor-pointer transition-colors"
           title="Clear all recent searches"
         >
@@ -475,25 +511,8 @@
       <!-- 1. Recommended for You -->
       <div class="flex flex-col gap-3.5 w-full">
         <div class="flex items-center justify-between">
-          <div class="flex items-center gap-2.5">
-            <h2 class="text-sm sm:text-base font-semibold text-white tracking-tight">Recommended for You</h2>
-            {#if player.currentSong}
-              <span class="text-[11px] font-mono text-neutral-500 uppercase truncate max-w-[200px]">
-                • Based on {player.currentSong.title}
-              </span>
-            {/if}
-          </div>
+          <h2 class="text-sm sm:text-base font-semibold text-white tracking-tight">Recommended for You</h2>
           <div class="flex items-center gap-1.5">
-            <button
-              onclick={() => feedStore.refreshRecommended(true)}
-              class="w-7 h-7 rounded-full bg-[#111114] hover:bg-[#1c1c22] text-neutral-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer border-none mr-1"
-              title="Refresh recommendations"
-              aria-label="Refresh recommendations"
-            >
-              <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
             <button
               onclick={() => scrollHorizontal('recommended', -1)}
               class="w-7 h-7 rounded-full bg-[#111114] hover:bg-[#1c1c22] text-neutral-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer border-none"

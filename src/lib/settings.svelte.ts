@@ -1,19 +1,18 @@
-export type AccentTheme = 'white' | 'blue' | 'emerald' | 'violet' | 'rose' | 'amber' | 'cyan';
+export type AccentTheme = 'blue' | 'white' | 'red' | 'pink' | 'purple' | 'violet' | 'rose' | 'emerald' | 'amber' | 'cyan';
 
 export interface ThemeOption {
   id: AccentTheme;
+  name: string;
   bg: string;
   contrast: string;
 }
 
 export const THEMES: ThemeOption[] = [
-  { id: 'white', bg: '#ffffff', contrast: '#000000' },
-  { id: 'blue', bg: '#3b82f6', contrast: '#ffffff' },
-  { id: 'emerald', bg: '#10b981', contrast: '#ffffff' },
-  { id: 'violet', bg: '#a855f7', contrast: '#ffffff' },
-  { id: 'rose', bg: '#f43f5e', contrast: '#ffffff' },
-  { id: 'amber', bg: '#f59e0b', contrast: '#000000' },
-  { id: 'cyan', bg: '#06b6d4', contrast: '#000000' }
+  { id: 'blue', name: 'Blue', bg: '#3b82f6', contrast: '#ffffff' },
+  { id: 'white', name: 'White', bg: '#ffffff', contrast: '#000000' },
+  { id: 'red', name: 'Red', bg: '#ef4444', contrast: '#ffffff' },
+  { id: 'pink', name: 'Pink', bg: '#ec4899', contrast: '#ffffff' },
+  { id: 'purple', name: 'Purple', bg: '#a855f7', contrast: '#ffffff' },
 ];
 
 class SettingsState {

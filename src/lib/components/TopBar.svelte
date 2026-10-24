@@ -81,16 +81,16 @@
   data-tauri-drag-region
   onmousedown={handleMouseDown}
   ondblclick={toggleMaximize}
-  class="h-16 w-full bg-black border-none flex items-center justify-between select-none z-50 flex-shrink-0 cursor-default relative"
+  class="h-12 sm:h-16 w-full bg-black border-none flex items-center justify-between select-none z-50 flex-shrink-0 cursor-default relative"
 >
-  <!-- Left: Centered Logo precisely aligned with sidebar icon column (w-16, x-center = 32px) -->
-  <div data-tauri-drag-region class="w-16 h-full flex items-center justify-center pointer-events-none flex-shrink-0">
-    <Logo class="w-7 h-7 text-white" />
+  <!-- Left: Centered Logo precisely aligned with sidebar icon column (w-12 on mobile, w-16 on desktop) -->
+  <div data-tauri-drag-region class="w-12 sm:w-16 h-full flex items-center justify-center pointer-events-none flex-shrink-0">
+    <Logo class="w-6 h-6 sm:w-7 sm:h-7 text-white" />
   </div>
 
-  <!-- Dynamic Active Tab Title (Aligned with page content left margin at x = 88px) -->
-  <div data-tauri-drag-region class="pl-6 flex items-center pointer-events-none flex-shrink-0">
-    <h1 class="text-2xl sm:text-[26px] font-bold text-white tracking-tight font-sans select-none leading-none">
+  <!-- Dynamic Active Tab Title (Aligned with page content left margin: x = 60px on mobile, x = 88px on desktop) -->
+  <div data-tauri-drag-region class="pl-3 sm:pl-6 flex items-center pointer-events-none flex-shrink-0">
+    <h1 class="text-xl sm:text-[26px] font-bold text-white tracking-tight font-sans select-none leading-none">
       {currentTitle}
     </h1>
   </div>

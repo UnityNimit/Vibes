@@ -68,9 +68,9 @@
   }
 </script>
 
-<div class="flex-1 h-full overflow-y-auto px-3.5 sm:px-6 pt-3 pb-28 flex flex-col gap-5 select-none font-sans bg-black w-full smooth-scroll-container">
+<div class="flex-1 h-full overflow-y-auto px-3 sm:px-6 pt-2 sm:pt-3 pb-28 flex flex-col gap-5 select-none font-sans bg-black w-full smooth-scroll-container">
   <!-- Minimalist Header (Full Width, Zero Partition Line) -->
-  <div class="flex items-center justify-between -mb-2 w-full select-none">
+  <div class="flex items-center justify-between min-h-10 -mb-2 w-full select-none">
     <p class="text-xs text-neutral-500 font-mono">
       {stats.total_songs} {stats.total_songs === 1 ? 'track' : 'tracks'} • {stats.total_size_mb.toFixed(1)} MB
     </p>
