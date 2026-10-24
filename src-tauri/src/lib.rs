@@ -1,8 +1,8 @@
-mod cache;
-mod library;
-mod lyrics;
-mod models;
-mod youtube;
+pub mod cache;
+pub mod library;
+pub mod lyrics;
+pub mod models;
+pub mod youtube;
 
 use cache::{
     auto_cache_song, clear_all_cache_files, delete_cache_item, download_song_async, get_cache_dir,
@@ -81,6 +81,25 @@ async fn get_stream(song: Song, auto_save: Option<bool>) -> Result<StreamResult,
         is_cached: false,
         local_path: None,
     })
+}
+
+#[tauri::command]
+async fn get_online_stream(song: Song) -> Result<StreamResult, String> {
+    let stream_url = resolve_stream_url(&song.id).await?;
+    Ok(StreamResult {
+        url: stream_url,
+        is_cached: false,
+        local_path: None,
+    })
+}
+
+#[tauri::command]
+async fn get_cached_audio_bytes(video_id: String) -> Result<Vec<u8>, String> {
+    if let Some(path) = get_cached_file(&video_id) {
+        std::fs::read(&path).map_err(|e| format!("Failed to read cached audio: {}", e))
+    } else {
+        Err("File not cached".to_string())
+    }
 }
 
 #[tauri::command]
@@ -266,6 +285,8 @@ pub fn run() {
             get_more_similar_songs,
             get_search_suggestions,
             get_stream,
+            get_online_stream,
+            get_cached_audio_bytes,
             prefetch_stream,
             trigger_auto_cache,
             download_song,

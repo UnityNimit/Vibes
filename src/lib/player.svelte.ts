@@ -56,6 +56,7 @@ class PlayerState {
   // Ultra-fast in-memory stream cache & lookahead pre-fetcher
   private streamCache = new Map<string, { result: StreamResult; timestamp: number }>();
   private autoCachedCurrent = false;
+  private currentBlobUrl: string | null = null;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -155,9 +156,32 @@ class PlayerState {
       this.handleSongEnd();
     });
 
-    this.audio.addEventListener('error', (e) => {
+    this.audio.addEventListener('error', async (e) => {
       const audioErr = this.audio?.error;
       console.error('[Audio Error]', e, 'Code:', audioErr?.code, 'Message:', audioErr?.message);
+
+      // Automatic self-healing: if cached or blob playback fails on Windows/WebView, immediately resolve and play live stream
+      if (this.currentSong && (this.isCached || this.currentBlobUrl)) {
+        console.warn('[Audio Recovery] Cached audio playback failed. Seamlessly fetching online stream...');
+        this.isCached = false;
+        if (this.currentBlobUrl) {
+          URL.revokeObjectURL(this.currentBlobUrl);
+          this.currentBlobUrl = null;
+        }
+        try {
+          const freshRes = await invoke<StreamResult>('get_online_stream', { song: this.currentSong });
+          if (freshRes.url && this.audio) {
+            this.audio.src = freshRes.url;
+            await this.audio.play();
+            this.isPlaying = true;
+            this.isLoading = false;
+            return;
+          }
+        } catch (recoverErr) {
+          console.error('[Audio Recovery Failed]', recoverErr);
+        }
+      }
+
       this.isLoading = false;
       this.isPlaying = false;
     });
@@ -407,10 +431,36 @@ class PlayerState {
 
       this.isCached = streamRes.is_cached;
 
-      if (streamRes.is_cached && streamRes.local_path) {
-        // High-performance Range-enabled native asset streaming
-        this.audio.src = convertFileSrc(streamRes.local_path);
+      if (streamRes.is_cached) {
+        let loadedBlob = false;
+        try {
+          // 1. High-speed direct byte loading into a Blob URL (100% immune to asset protocol restrictions)
+          const bytes = await invoke<number[]>('get_cached_audio_bytes', { videoId: song.id });
+          if (bytes && bytes.length > 0) {
+            const blob = new Blob([new Uint8Array(bytes)], { type: 'audio/mp4' });
+            if (this.currentBlobUrl) {
+              URL.revokeObjectURL(this.currentBlobUrl);
+            }
+            this.currentBlobUrl = URL.createObjectURL(blob);
+            this.audio.src = this.currentBlobUrl;
+            loadedBlob = true;
+          }
+        } catch (e) {
+          console.warn('[Cache Load] Direct byte load failed, falling back:', e);
+        }
+
+        if (!loadedBlob) {
+          if (streamRes.local_path) {
+            this.audio.src = convertFileSrc(streamRes.local_path);
+          } else {
+            this.audio.src = streamRes.url;
+          }
+        }
       } else {
+        if (this.currentBlobUrl) {
+          URL.revokeObjectURL(this.currentBlobUrl);
+          this.currentBlobUrl = null;
+        }
         // Direct stream from Google CDN
         this.audio.src = streamRes.url;
       }
@@ -421,8 +471,26 @@ class PlayerState {
       }
 
       if (autoPlay) {
-        await this.audio.play();
-        this.isPlaying = true;
+        try {
+          await this.audio.play();
+          this.isPlaying = true;
+        } catch (playErr) {
+          console.warn('[Audio Play Promise Rejected]', playErr);
+          // If playback failed on a cached source, immediately recover via online stream
+          if (this.isCached || this.currentBlobUrl) {
+            this.isCached = false;
+            if (this.currentBlobUrl) {
+              URL.revokeObjectURL(this.currentBlobUrl);
+              this.currentBlobUrl = null;
+            }
+            const freshRes = await invoke<StreamResult>('get_online_stream', { song });
+            this.audio.src = freshRes.url;
+            await this.audio.play();
+            this.isPlaying = true;
+          } else {
+            throw playErr;
+          }
+        }
       } else {
         this.audio.pause();
         this.isPlaying = false;

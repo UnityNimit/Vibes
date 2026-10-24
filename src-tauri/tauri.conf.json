@@ -18,14 +18,27 @@
         "minWidth": 850,
         "minHeight": 580,
         "decorations": false,
-        "transparent": false
+        "transparent": false,
+        "devtools": true
       }
     ],
     "security": {
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["**"]
+        "scope": [
+          "**",
+          "$APPDATA/**",
+          "$APPDATA/Vibes/**",
+          "$APPDATA/Vibes/cache/**",
+          "$LOCALAPPDATA/**",
+          "$AUDIO/**",
+          "C:/**",
+          "C:\\**",
+          "D:/**",
+          "D:\\**",
+          "*"
+        ]
       }
     }
   },
