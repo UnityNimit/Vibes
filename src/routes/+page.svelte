@@ -9,11 +9,11 @@
   import NowPlayingView from '$lib/components/NowPlayingView.svelte';
   import SettingsView from '$lib/components/SettingsView.svelte';
   import PlaylistsView from '$lib/components/PlaylistsView.svelte';
+  import JamView from '$lib/components/JamView.svelte';
   import BottomPlayer from '$lib/components/BottomPlayer.svelte';
-  import JamModal from '$lib/components/JamModal.svelte';
   import { player } from '$lib/player.svelte';
 
-  type Tab = 'search' | 'liked' | 'saved' | 'playlists' | 'settings' | 'now_playing';
+  type Tab = 'search' | 'liked' | 'saved' | 'playlists' | 'jam' | 'settings' | 'now_playing';
 
   let currentTab = $state<Tab>('search');
   let previousTab = $state<Tab>('search');
@@ -102,6 +102,8 @@
         <CacheView />
       {:else if currentTab === 'playlists'}
         <PlaylistsView />
+      {:else if currentTab === 'jam'}
+        <JamView />
       {:else if currentTab === 'settings'}
         <SettingsView />
       {:else if currentTab === 'now_playing' && !isMobileAndroid}
@@ -114,6 +116,7 @@
   <BottomPlayer
     {currentTab}
     onToggleNowPlaying={toggleNowPlaying}
+    onSelectTab={handleSelectTab}
   />
 
   {#if isMobileAndroid}
@@ -124,6 +127,4 @@
       <NowPlayingView onClose={toggleNowPlaying} />
     </div>
   {/if}
-
-  <JamModal />
 </div>

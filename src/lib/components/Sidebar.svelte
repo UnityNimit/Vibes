@@ -2,8 +2,8 @@
   import { jamStore } from '../jamStore.svelte';
 
   interface Props {
-    currentTab: 'search' | 'liked' | 'saved' | 'playlists' | 'settings' | 'now_playing';
-    onSelectTab: (tab: 'search' | 'liked' | 'saved' | 'playlists' | 'settings' | 'now_playing') => void;
+    currentTab: 'search' | 'liked' | 'saved' | 'playlists' | 'jam' | 'settings' | 'now_playing';
+    onSelectTab: (tab: 'search' | 'liked' | 'saved' | 'playlists' | 'jam' | 'settings' | 'now_playing') => void;
   }
 
   let { currentTab, onSelectTab }: Props = $props();
@@ -60,11 +60,11 @@
       </svg>
     </button>
 
-    <!-- Jam Session Action (At the place of Settings button) -->
+    <!-- Jam Session Action (Main View Tab) -->
     <button
       type="button"
-      onclick={() => jamStore.toggleModal()}
-      class="relative w-10 h-10 flex items-center justify-center transition-colors duration-150 cursor-pointer overflow-visible {jamStore.status === 'connected' ? 'text-accent' : 'text-neutral-500 hover:text-white'}"
+      onclick={() => onSelectTab('jam')}
+      class="relative w-10 h-10 flex items-center justify-center transition-colors duration-150 cursor-pointer overflow-visible {currentTab === 'jam' || jamStore.status === 'connected' ? 'text-accent' : 'text-neutral-500 hover:text-white'}"
       title={jamStore.status === 'connected' ? `Jamming in Room ${jamStore.roomCode}` : 'Jam Session'}
       aria-label="Jam Session"
     >

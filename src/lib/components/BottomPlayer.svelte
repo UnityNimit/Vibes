@@ -10,11 +10,12 @@
   import RepeatIcon from './RepeatIcon.svelte';
 
   interface Props {
-    currentTab?: 'search' | 'liked' | 'saved' | 'playlists' | 'settings' | 'now_playing';
+    currentTab?: 'search' | 'liked' | 'saved' | 'playlists' | 'jam' | 'settings' | 'now_playing';
     onToggleNowPlaying: () => void;
+    onSelectTab?: (tab: 'search' | 'liked' | 'saved' | 'playlists' | 'jam' | 'settings' | 'now_playing') => void;
   }
 
-  let { currentTab, onToggleNowPlaying }: Props = $props();
+  let { currentTab, onToggleNowPlaying, onSelectTab }: Props = $props();
 
   let isMobileAndroid = $state(isAndroid());
 
@@ -245,7 +246,7 @@
               {#if jamStore.status === 'connected'}
                 <button
                   type="button"
-                  onclick={(e) => { e.stopPropagation(); jamStore.open(); }}
+                  onclick={(e) => { e.stopPropagation(); onSelectTab ? onSelectTab('jam') : jamStore.open(); }}
                   class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/20 flex-shrink-0 cursor-pointer"
                 >
                   JAM ({jamStore.peerCount})
@@ -378,7 +379,7 @@
           {#if jamStore.status === 'connected'}
             <button
               type="button"
-              onclick={() => jamStore.open()}
+              onclick={() => onSelectTab ? onSelectTab('jam') : jamStore.open()}
               class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/15 hover:bg-accent/25 text-accent border border-accent/20 flex-shrink-0 cursor-pointer transition-colors"
               title="Manage Jam Session"
             >

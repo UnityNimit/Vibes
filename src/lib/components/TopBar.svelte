@@ -5,7 +5,7 @@
   import Logo from './Logo.svelte';
 
   interface Props {
-    currentTab?: 'search' | 'liked' | 'saved' | 'playlists' | 'settings' | 'now_playing';
+    currentTab?: 'search' | 'liked' | 'saved' | 'playlists' | 'jam' | 'settings' | 'now_playing';
   }
 
   let { currentTab = 'search' }: Props = $props();
@@ -18,6 +18,7 @@
     liked: 'Liked Songs',
     saved: 'Saved',
     playlists: 'Playlists',
+    jam: 'Jam Session',
     settings: 'Settings',
     now_playing: 'Now Playing'
   };
