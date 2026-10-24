@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { isAndroid } from '../platform';
+  import { isMobile } from '../platform';
   import { playlistStore } from '../playlistStore.svelte';
   import { player } from '../player.svelte';
   import { savedStore } from '../savedStore.svelte';
@@ -17,10 +17,10 @@
   let isRenaming = $state<boolean>(false);
   let renameValue = $state<string>('');
   let renameInputEl = $state<HTMLInputElement | null>(null);
-  let isMobileAndroid = $state(isAndroid());
+  let isMobileView = $state(isMobile());
 
   onMount(() => {
-    isMobileAndroid = isAndroid();
+    isMobileView = isMobile();
   });
 
   let selectedPlaylist = $derived<Playlist | null>(
@@ -228,7 +228,7 @@
       <!-- Songs Table (Matching Liked & Saved views) -->
       {#if selectedPlaylist.songs.length > 0}
         <div class="flex flex-col gap-1 w-full mt-2">
-          {#if !isMobileAndroid}
+          {#if !isMobileView}
             <!-- Desktop Grid Column Header -->
             <div class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 pb-2 text-xs text-neutral-500 font-mono w-full select-none">
               <span class="text-center">#</span>
@@ -242,7 +242,7 @@
 
           <!-- Result Rows -->
           {#each selectedPlaylist.songs as song, i}
-            {#if isMobileAndroid}
+            {#if isMobileView}
               <!-- Android Mobile Track Row: Pure Track (Art + Title/Artist) + Time + Remove Action -->
               <div
                 role="button"

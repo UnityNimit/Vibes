@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { isAndroid } from '$lib/platform';
+  import { isMobile } from '$lib/platform';
 
   interface TooltipPos {
     x: number;
@@ -100,8 +100,8 @@
   }
 
   onMount(() => {
-    if (isAndroid()) {
-      // On Android, disable all hover hints / tooltips entirely
+    if (isMobile()) {
+      // On Mobile (Android & iOS), disable all hover hints / tooltips entirely
       const stripTitles = () => {
         document.querySelectorAll('[title]').forEach(el => el.removeAttribute('title'));
       };

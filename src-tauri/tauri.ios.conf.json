@@ -1,0 +1,11 @@
+{
+  "build": {
+    "devUrl": null,
+    "frontendDist": "../build"
+  },
+  "bundle": {
+    "iOS": {
+      "developmentTeam": ""
+    }
+  }
+}

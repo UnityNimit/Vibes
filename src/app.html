@@ -9,9 +9,22 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <script>
-      if (typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)) {
-        document.documentElement.classList.add('is-mobile-android');
-      }
+      (function() {
+        if (typeof navigator !== 'undefined') {
+          var ua = navigator.userAgent || '';
+          var isAndroid = /Android/i.test(ua);
+          var isIOS = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+          if (isAndroid || isIOS || /mobile|tablet/i.test(ua)) {
+            document.documentElement.classList.add('is-mobile');
+          }
+          if (isAndroid) {
+            document.documentElement.classList.add('is-mobile-android');
+          }
+          if (isIOS) {
+            document.documentElement.classList.add('is-mobile-ios');
+          }
+        }
+      })();
     </script>
     %sveltekit.head%
   </head>

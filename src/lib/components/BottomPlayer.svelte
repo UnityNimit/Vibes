@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { isAndroid } from '../platform';
+  import { isMobile } from '../platform';
   import { player } from '../player.svelte';
   import { playlistStore } from '../playlistStore.svelte';
   import { jamStore } from '../jamStore.svelte';
@@ -17,10 +17,10 @@
 
   let { currentTab, onToggleNowPlaying, onSelectTab }: Props = $props();
 
-  let isMobileAndroid = $state(isAndroid());
+  let isMobilePlayer = $state(isMobile());
 
   onMount(() => {
-    isMobileAndroid = isAndroid();
+    isMobilePlayer = isMobile();
   });
 
   let showPlaylistMenu = $state(false);
@@ -152,10 +152,11 @@
   </span>
 
   <div
-    class="fixed bottom-0 left-0 right-0 z-40 h-20 bg-black/95 backdrop-blur-2xl px-4 sm:px-6 flex items-center justify-between select-none shadow-2xl transition-all duration-300 font-sans overflow-visible"
+    class="fixed bottom-0 left-0 right-0 z-40 bg-black/95 backdrop-blur-2xl px-4 sm:px-6 flex items-center justify-between select-none shadow-2xl transition-all duration-300 font-sans overflow-visible"
+    style="height: {isMobilePlayer ? 'calc(5rem + env(safe-area-inset-bottom, 0px))' : '5rem'}; padding-bottom: env(safe-area-inset-bottom, 0px);"
   >
-    {#if isMobileAndroid}
-      <!-- Top Edge Animated Wave Progress Bar for Android (Starts at 84px to avoid the poked-out vinyl disc) -->
+    {#if isMobilePlayer}
+      <!-- Top Edge Animated Wave Progress Bar for Mobile (Starts at 84px to avoid the poked-out vinyl disc) -->
       <div
         class="absolute top-0 right-0 h-4 -translate-y-2 flex items-center z-30 select-none overflow-hidden"
         style="left: 84px;"

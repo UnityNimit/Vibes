@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
-  import { isAndroid } from '../platform';
+  import { isMobile } from '../platform';
   import { player } from '../player.svelte';
   import { savedStore } from '../savedStore.svelte';
   import { feedStore } from '../feedStore.svelte';
@@ -17,7 +17,7 @@
   let isLoadingMore = $state(false);
   let hasSearched = $state(false);
   let scrollContainerEl = $state<HTMLDivElement | null>(null);
-  let isMobileAndroid = $state(isAndroid());
+  let isMobileView = $state(isMobile());
 
   // Containers for horizontal carousels
   let recommendedContainerEl = $state<HTMLDivElement | null>(null);
@@ -50,7 +50,7 @@
   }
 
   onMount(() => {
-    isMobileAndroid = isAndroid();
+    isMobileView = isMobile();
     if (feedStore.recommendedSongs.length === 0) {
       feedStore.refreshAllFeeds();
     }
@@ -397,7 +397,7 @@
   {:else if hasSearched && results.length > 0}
     <!-- Active Search Results -->
     <div class="flex flex-col gap-1 w-full pt-1">
-      {#if !isMobileAndroid}
+      {#if !isMobileView}
         <!-- Desktop Grid Column Header -->
         <div class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 pb-2 text-xs text-neutral-500 font-mono w-full select-none">
           <span class="text-center">#</span>
@@ -411,7 +411,7 @@
 
       <!-- Result Rows -->
       {#each results as song, i}
-        {#if isMobileAndroid}
+        {#if isMobileView}
           <!-- Android Mobile Track Row: Pure Track (Art + Title/Artist) + Time (Duration / Equalizer) -->
           <div
             role="button"

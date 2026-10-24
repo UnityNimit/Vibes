@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
-  import { isAndroid } from '$lib/platform';
+  import { isMobile } from '$lib/platform';
   import Logo from './Logo.svelte';
 
   interface Props {
@@ -11,7 +11,7 @@
   let { currentTab = 'search' }: Props = $props();
 
   let isMaximized = $state(false);
-  let isMobileAndroid = $state(false);
+  let isMobilePlatform = $state(false);
 
   const TAB_TITLES: Record<string, string> = {
     search: 'Search',
@@ -34,8 +34,8 @@
   }
 
   onMount(() => {
-    isMobileAndroid = isAndroid();
-    if (!isMobileAndroid) {
+    isMobilePlatform = isMobile();
+    if (!isMobilePlatform) {
       checkMaximized();
     }
   });
@@ -97,9 +97,9 @@
   </div>
 
   <!-- Middle: Drag area spacer (padded on right for absolute window buttons on desktop) -->
-  <div data-tauri-drag-region class="flex-1 h-full cursor-default {isMobileAndroid ? '' : 'pr-36'}"></div>
+  <div data-tauri-drag-region class="flex-1 h-full cursor-default {isMobilePlatform ? '' : 'pr-36'}"></div>
 
-  {#if !isMobileAndroid}
+  {#if !isMobilePlatform}
   <!-- Right: Window Controls (Pinned flush to top-right corner, ZERO margin from top) -->
   <div class="absolute top-0 right-0 flex items-center h-10 sm:h-11 flex-shrink-0 z-20" data-tauri-drag-region="false">
     <!-- Minimize -->

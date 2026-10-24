@@ -91,18 +91,28 @@
     background: rgba(255, 255, 255, 0.25);
   }
 
-  /* Completely remove all scrollbars on Android version for maximum screen estate & ultra-clean UI */
+  /* Completely remove all scrollbars on mobile version (Android & iOS) for maximum screen estate & ultra-clean UI */
+  .is-mobile ::-webkit-scrollbar,
+  .is-mobile *::-webkit-scrollbar,
+  .is-mobile::-webkit-scrollbar,
   .is-mobile-android ::-webkit-scrollbar,
   .is-mobile-android *::-webkit-scrollbar,
-  .is-mobile-android::-webkit-scrollbar {
+  .is-mobile-android::-webkit-scrollbar,
+  .is-mobile-ios ::-webkit-scrollbar,
+  .is-mobile-ios *::-webkit-scrollbar,
+  .is-mobile-ios::-webkit-scrollbar {
     display: none !important;
     width: 0 !important;
     height: 0 !important;
     background: transparent !important;
   }
 
+  .is-mobile,
+  .is-mobile *,
   .is-mobile-android,
-  .is-mobile-android * {
+  .is-mobile-android *,
+  .is-mobile-ios,
+  .is-mobile-ios * {
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
   }

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
-  import { isAndroid } from '../platform';
+  import { isMobile } from '../platform';
   import { player } from '../player.svelte';
   import { playlistStore } from '../playlistStore.svelte';
   import { likedStore } from '../likedStore.svelte';
@@ -19,10 +19,10 @@
 
   let { onClose }: Props = $props();
 
-  let isMobileAndroid = $state(isAndroid());
+  let isMobileView = $state(isMobile());
 
   onMount(() => {
-    isMobileAndroid = isAndroid();
+    isMobileView = isMobile();
   });
 
   let showSimilarMobile = $state(false);
@@ -417,11 +417,11 @@
   </span>
 {/if}
 
-{#if isMobileAndroid}
+{#if isMobileView}
   {#if player.currentSong}
     <div
-      class="w-full h-full flex flex-col justify-between items-center select-none font-sans bg-black px-5 pb-8 relative overflow-hidden"
-      style="padding-top: max(env(safe-area-inset-top, 36px), 36px);"
+      class="w-full h-full flex flex-col justify-between items-center select-none font-sans bg-black px-5 relative overflow-hidden"
+      style="padding-top: max(env(safe-area-inset-top, 36px), 36px); padding-bottom: max(env(safe-area-inset-bottom, 24px), 24px);"
     >
       <!-- Top Action Row: Top-Left Down Chevron, Top-Center Context, Top-Right Similar Songs Arrow -->
       <div class="w-full flex items-center justify-between flex-shrink-0 z-20">
@@ -685,7 +685,7 @@
       <!-- Slide-over Similar Songs List (Sliding in from Right with Pure Black Background) -->
       <div
         class="absolute inset-0 bg-black z-40 flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] {showSimilarMobile ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none'}"
-        style="padding-top: max(env(safe-area-inset-top, 36px), 36px);"
+        style="padding-top: max(env(safe-area-inset-top, 36px), 36px); padding-bottom: max(env(safe-area-inset-bottom, 20px), 20px);"
       >
         <!-- Header with Back Button -->
         <div class="w-full flex items-center justify-between px-5 pt-3 pb-3 border-b border-white/10 flex-shrink-0">
