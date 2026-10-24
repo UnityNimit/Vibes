@@ -247,9 +247,12 @@
                 <button
                   type="button"
                   onclick={(e) => { e.stopPropagation(); onSelectTab ? onSelectTab('jam') : jamStore.open(); }}
-                  class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/15 text-accent border border-accent/20 flex-shrink-0 cursor-pointer"
+                  class="flex items-center gap-1.5 text-[9px] font-mono px-2 py-0.5 rounded-full bg-accent/15 text-accent border border-accent/25 flex-shrink-0 cursor-pointer"
+                  title="Jam"
+                  aria-label="Jam"
                 >
-                  JAM ({jamStore.peerCount})
+                  <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
+                  <span>{jamStore.peerCount}</span>
                 </button>
               {/if}
             </div>
@@ -380,10 +383,12 @@
             <button
               type="button"
               onclick={() => onSelectTab ? onSelectTab('jam') : jamStore.open()}
-              class="text-[9px] font-mono px-1.5 py-0.5 rounded bg-accent/15 hover:bg-accent/25 text-accent border border-accent/20 flex-shrink-0 cursor-pointer transition-colors"
-              title="Manage Jam Session"
+              class="flex items-center gap-1.5 text-[9px] font-mono px-2 py-0.5 rounded-full bg-accent/15 hover:bg-accent/25 text-accent border border-accent/25 flex-shrink-0 cursor-pointer transition-colors"
+              title="Jam"
+              aria-label="Jam"
             >
-              JAM ({jamStore.peerCount})
+              <span class="w-1.5 h-1.5 rounded-full bg-accent animate-pulse"></span>
+              <span>{jamStore.peerCount}</span>
             </button>
           {/if}
         </div>

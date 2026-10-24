@@ -18,7 +18,7 @@
     liked: 'Liked Songs',
     saved: 'Saved',
     playlists: 'Playlists',
-    jam: 'Jam Session',
+    jam: '',
     settings: 'Settings',
     now_playing: 'Now Playing'
   };
