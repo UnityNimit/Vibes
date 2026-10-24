@@ -163,6 +163,9 @@ class PlayerState {
     });
   }
 
+  // Precision lead-time offset (compensates for audio buffer latency, vocal attack lead, and visual transition easing)
+  private readonly LYRIC_OFFSET = 0.25;
+
   private updateActiveLyric() {
     if (this.parsedLyrics.length === 0) {
       if (this.activeLyricIndex !== -1) {
@@ -170,7 +173,7 @@ class PlayerState {
       }
       return;
     }
-    const ct = this.currentTime;
+    const ct = this.currentTime + this.LYRIC_OFFSET;
     let idx = -1;
     for (let i = 0; i < this.parsedLyrics.length; i++) {
       if (ct >= this.parsedLyrics[i].time) {
@@ -184,24 +187,71 @@ class PlayerState {
     }
   }
 
+  tickLyricSync() {
+    if (this.audio && this.isPlaying && this.parsedLyrics.length > 0) {
+      this.currentTime = this.audio.currentTime;
+      this.updateActiveLyric();
+    }
+  }
+
   private parseLyrics(synced: string): LyricLine[] {
     const lines = synced.split('\n');
     const result: LyricLine[] = [];
-    const regex = /\[(\d{2}):(\d{2})\.(\d{2,3})\](.*)/;
+    let offsetMs = 0;
+
+    // 1. Detect [offset: +/-ms] metadata tag
+    for (const line of lines) {
+      const offsetMatch = line.match(/\[offset:\s*([+-]?\d+)\]/i);
+      if (offsetMatch) {
+        offsetMs = parseInt(offsetMatch[1], 10) || 0;
+        break;
+      }
+    }
+
+    const offsetSecs = offsetMs / 1000;
+    const timestampRegex = /\[(\d{1,3}):(\d{2})(?:\.(\d{1,3}))?\]/g;
 
     for (const line of lines) {
-      const match = line.match(regex);
-      if (match) {
+      const trimmed = line.trim();
+      // Skip LRC metadata tags like [ar:...], [ti:...], [offset:...]
+      if (/^\[(ti|ar|al|au|by|offset|length|re|ve):/i.test(trimmed)) {
+        continue;
+      }
+
+      // 2. Support multiple timestamps per line (e.g. [00:12.30][00:45.10]Chorus line)
+      const timestamps: number[] = [];
+      let lastMatchIndex = 0;
+      let match: RegExpExecArray | null;
+
+      timestampRegex.lastIndex = 0;
+      while ((match = timestampRegex.exec(trimmed)) !== null) {
         const minutes = parseInt(match[1], 10);
         const seconds = parseInt(match[2], 10);
-        const fraction = parseFloat('0.' + match[3]);
-        const time = minutes * 60 + seconds + fraction;
-        const text = match[4].trim();
-        if (text) {
+        let fraction = 0;
+        if (match[3]) {
+          if (match[3].length === 1) {
+            fraction = parseInt(match[3], 10) / 10;
+          } else if (match[3].length === 2) {
+            fraction = parseInt(match[3], 10) / 100;
+          } else {
+            fraction = parseInt(match[3].slice(0, 3), 10) / 1000;
+          }
+        }
+        const time = Math.max(0, minutes * 60 + seconds + fraction - offsetSecs);
+        timestamps.push(time);
+        lastMatchIndex = timestampRegex.lastIndex;
+      }
+
+      if (timestamps.length > 0) {
+        const text = trimmed.slice(lastMatchIndex).trim();
+        for (const time of timestamps) {
           result.push({ time, text });
         }
       }
     }
+
+    // 3. Sort ascending by time
+    result.sort((a, b) => a.time - b.time);
     return result;
   }
 
@@ -322,10 +372,12 @@ class PlayerState {
 
     // Fetch lyrics in background
     this.isLoadingLyrics = true;
+    const durSecs = song.duration ? parseDurationToSeconds(song.duration) : null;
+    const durationParam = durSecs && durSecs > 0 ? durSecs : null;
     invoke<{ synced: string | null; plain: string | null }>('get_song_lyrics', {
       title: song.title,
       artist: song.artist,
-      durationSecs: null
+      durationSecs: durationParam
     }).then(res => {
       this.lyrics = res;
       if (res.synced) {

@@ -245,8 +245,39 @@
     player.showLyrics = !player.showLyrics;
   }
 
-  function jumpToLyric(time: number) {
-    player.seek(time);
+  let isTouchDragging = false;
+  let touchStartY = 0;
+
+  function onUserLyricsTouchStart(e: TouchEvent) {
+    if (e.touches.length > 0) {
+      touchStartY = e.touches[0].clientY;
+      isTouchDragging = false;
+    }
+  }
+
+  function onUserLyricsTouchMove(e: TouchEvent) {
+    if (e.touches.length > 0) {
+      const diff = Math.abs(e.touches[0].clientY - touchStartY);
+      if (diff > 8) {
+        isTouchDragging = true;
+      }
+    }
+    isUserScrollingLyrics = true;
+    if (userScrollTimeout) clearTimeout(userScrollTimeout);
+    userScrollTimeout = setTimeout(() => {
+      isUserScrollingLyrics = false;
+      if (player.showLyrics && player.activeLyricIndex !== -1) {
+        scrollToActiveLyric(player.activeLyricIndex, false);
+      }
+    }, 2500);
+  }
+
+  function handleArtClick() {
+    if (isTouchDragging) {
+      isTouchDragging = false;
+      return;
+    }
+    toggleLyrics();
   }
 
   let scrollAnimId: number | null = null;
@@ -350,6 +381,22 @@
       }
     }
   });
+
+  // High-precision RAF lyric sync: ensures 0ms latency synchronization when lyrics are open
+  $effect(() => {
+    if (!player.showLyrics || !player.isPlaying) return;
+
+    let animId: number;
+    function syncLyrics() {
+      player.tickLyricSync();
+      animId = requestAnimationFrame(syncLyrics);
+    }
+    animId = requestAnimationFrame(syncLyrics);
+
+    return () => {
+      cancelAnimationFrame(animId);
+    };
+  });
 </script>
 
 {#if player.currentSong}
@@ -416,7 +463,7 @@
         <div
           role="button"
           tabindex="0"
-          onclick={toggleLyrics}
+          onclick={handleArtClick}
           onkeydown={(e) => { if (e.key === 'Enter') toggleLyrics(); }}
           class="relative w-[76vw] max-w-[300px] aspect-square rounded-2xl overflow-hidden bg-[#0c0c0e] shadow-[0_16px_48px_rgba(0,0,0,0.9)] flex-shrink-0 cursor-pointer"
         >
@@ -442,33 +489,35 @@
           <div
             class="absolute inset-0 z-20 flex flex-col justify-center items-center transition-opacity duration-400 ease-[cubic-bezier(0.16,1,0.3,1)] {player.showLyrics ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}"
           >
+            <!-- svelte-ignore a11y_no_static_element_interactions -->
             <div
               bind:this={lyricsContainerEl}
               onwheel={onUserLyricsWheel}
-              class="w-full h-full overflow-y-auto px-6 py-24 flex flex-col items-center text-center gap-3 select-none no-scrollbar"
+              ontouchstart={onUserLyricsTouchStart}
+              ontouchmove={onUserLyricsTouchMove}
+              class="w-full h-full overflow-y-auto px-6 py-24 flex flex-col items-center text-center gap-3 select-none no-scrollbar cursor-pointer"
               style="-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%);"
             >
               {#if player.parsedLyrics.length > 0}
                 {#each player.parsedLyrics as line, i}
-                  <button
+                  <p
                     data-lyric-index={i}
-                    onclick={(e) => { e.stopPropagation(); jumpToLyric(line.time); }}
-                    class="w-full px-3 py-1.5 rounded-xl text-center leading-relaxed cursor-pointer transition-[color,opacity,filter] duration-300 text-sm font-normal tracking-wide {player.activeLyricIndex === i ? 'text-white opacity-100 drop-shadow-[0_2px_12px_rgba(255,255,255,0.45)]' : 'text-white/35 opacity-70 hover:opacity-100 hover:text-white/80'}"
+                    class="w-full px-3 py-1.5 text-center leading-relaxed transition-[color,opacity,filter] duration-300 text-sm font-normal tracking-wide select-none pointer-events-none {player.activeLyricIndex === i ? 'text-white opacity-100 drop-shadow-[0_2px_12px_rgba(255,255,255,0.45)]' : 'text-white/35 opacity-70'}"
                   >
                     {line.text.trim() || '• • •'}
-                  </button>
+                  </p>
                 {/each}
               {:else if player.lyrics.plain}
-                <div class="whitespace-pre-line text-xs text-neutral-300 max-w-full px-4 leading-relaxed font-normal my-auto">
+                <div class="whitespace-pre-line text-xs text-neutral-300 max-w-full px-4 leading-relaxed font-normal my-auto select-none pointer-events-none">
                   {player.lyrics.plain}
                 </div>
               {:else if player.isLoadingLyrics}
-                <div class="flex flex-col items-center justify-center my-auto gap-2 text-neutral-400">
+                <div class="flex flex-col items-center justify-center my-auto gap-2 text-neutral-400 select-none pointer-events-none">
                   <div class="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
                   <span class="text-xs font-mono">LOADING LYRICS...</span>
                 </div>
               {:else}
-                <div class="flex items-center justify-center my-auto text-neutral-400">
+                <div class="flex items-center justify-center my-auto text-neutral-400 select-none pointer-events-none">
                   <p class="text-xs font-mono tracking-wider">NO LYRICS AVAILABLE</p>
                 </div>
               {/if}
@@ -835,7 +884,7 @@
         <div
           role="button"
           tabindex="0"
-          onclick={toggleLyrics}
+          onclick={handleArtClick}
           onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleLyrics(); } }}
           class="relative aspect-square rounded-2xl overflow-hidden bg-[#0c0c0e] shadow-2xl flex-shrink-0 cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] {showSimilar ? 'w-56 h-56 sm:w-64 sm:h-64 md:w-72 md:h-72 lg:w-80 lg:h-80' : 'w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96 lg:w-[420px] lg:h-[420px]'}"
         >
@@ -847,7 +896,7 @@
               src={player.currentSong.thumb}
               songId={player.currentSong.id}
               alt={player.currentSong.title}
-              class="w-full h-full object-cover"
+              class="w-full h-full object-cover select-none pointer-events-none"
               iconClass="w-24 h-24 text-neutral-600"
               highQuality={true}
             />
@@ -867,30 +916,29 @@
             <div
               bind:this={lyricsContainerEl}
               onwheel={onUserLyricsWheel}
-              class="w-full h-full overflow-y-auto px-6 py-28 sm:py-36 flex flex-col items-center text-center gap-3 select-none no-scrollbar"
+              class="w-full h-full overflow-y-auto px-6 py-28 sm:py-36 flex flex-col items-center text-center gap-3 select-none no-scrollbar cursor-pointer"
               style="-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%);"
             >
               {#if player.parsedLyrics.length > 0}
                 {#each player.parsedLyrics as line, i}
-                  <button
+                  <p
                     data-lyric-index={i}
-                    onclick={(e) => { e.stopPropagation(); jumpToLyric(line.time); }}
-                    class="w-full max-w-sm sm:max-w-md px-3 py-1.5 rounded-xl text-center leading-relaxed cursor-pointer transition-[color,opacity,filter] duration-300 text-sm sm:text-base font-normal tracking-wide {player.activeLyricIndex === i ? 'text-white opacity-100 drop-shadow-[0_2px_12px_rgba(255,255,255,0.45)]' : 'text-white/35 opacity-70 hover:opacity-100 hover:text-white/80'}"
+                    class="w-full max-w-sm sm:max-w-md px-3 py-1.5 text-center leading-relaxed transition-[color,opacity,filter] duration-300 text-sm sm:text-base font-normal tracking-wide select-none pointer-events-none {player.activeLyricIndex === i ? 'text-white opacity-100 drop-shadow-[0_2px_12px_rgba(255,255,255,0.45)]' : 'text-white/35 opacity-70'}"
                   >
                     {line.text.trim() || '• • •'}
-                  </button>
+                  </p>
                 {/each}
               {:else if player.lyrics.plain}
-                <div class="whitespace-pre-line text-xs sm:text-sm text-neutral-300 max-w-full px-4 leading-relaxed font-normal my-auto">
+                <div class="whitespace-pre-line text-xs sm:text-sm text-neutral-300 max-w-full px-4 leading-relaxed font-normal my-auto select-none pointer-events-none">
                   {player.lyrics.plain}
                 </div>
               {:else if player.isLoadingLyrics}
-                <div class="flex flex-col items-center justify-center my-auto gap-2 text-neutral-400">
+                <div class="flex flex-col items-center justify-center my-auto gap-2 text-neutral-400 select-none pointer-events-none">
                   <div class="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
                   <span class="text-xs font-mono">LOADING LYRICS...</span>
                 </div>
               {:else}
-                <div class="flex items-center justify-center my-auto text-neutral-400">
+                <div class="flex items-center justify-center my-auto text-neutral-400 select-none pointer-events-none">
                   <p class="text-xs font-mono tracking-wider">NO LYRICS AVAILABLE</p>
                 </div>
               {/if}
