@@ -37,6 +37,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Select Xcode 16
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: 'latest-stable'
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -73,6 +78,9 @@ jobs:
           
           # Detect the iOS scheme (e.g. tauri-app_iOS or Vibes_iOS)
           SCHEME_NAME=$(xcodebuild -list -project "$PROJECT_PATH" | grep -A 10 "Schemes:" | grep -E "_iOS|Vibes|tauri" | head -n 1 | tr -d ' ')
+          if [ -z "$SCHEME_NAME" ]; then
+            SCHEME_NAME="tauri-app_iOS"
+          fi
           echo "Selected Scheme: $SCHEME_NAME"
           
           # Build archive without requiring code signing
@@ -81,7 +89,7 @@ jobs:
             -scheme "$SCHEME_NAME" \
             -configuration Release \
             -destination "generic/platform=iOS" \
-            -archivePath src-tauri/gen/apple/build/App.xcarchive \
+            -archivePath "$PWD/src-tauri/gen/apple/build/App.xcarchive" \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGNING_ALLOWED=NO
 
