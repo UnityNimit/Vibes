@@ -3,10 +3,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Song {
     pub id: String,
+    #[serde(default)]
     pub title: String,
+    #[serde(default)]
     pub artist: String,
+    #[serde(default)]
     pub album: String,
+    #[serde(default)]
     pub duration: String,
+    #[serde(default)]
     pub thumb: String,
 }
 

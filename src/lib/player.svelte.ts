@@ -380,7 +380,16 @@ class PlayerState {
       return;
     }
 
-    this.currentSong = song;
+    const safeSong: Song = {
+      id: song.id,
+      title: song.title || 'Unknown Title',
+      artist: song.artist || 'Unknown Artist',
+      album: song.album || song.artist || '',
+      duration: song.duration || '--:--',
+      thumb: song.thumb || ''
+    };
+
+    this.currentSong = safeSong;
     this.syncMediaNotification('metadata');
     this.isLoading = true;
     this.autoCachedCurrent = false;
@@ -391,16 +400,16 @@ class PlayerState {
     this.lyrics = { synced: null, plain: null };
 
     // Initialize cached status from local saved store & liked status from liked store
-    this.isCached = savedStore.isSaved(song.id);
-    this.isLiked = likedStore.isLiked(song.id);
+    this.isCached = savedStore.isSaved(safeSong.id);
+    this.isLiked = likedStore.isLiked(safeSong.id);
 
     // Fetch lyrics in background
     this.isLoadingLyrics = true;
-    const durSecs = song.duration ? parseDurationToSeconds(song.duration) : null;
+    const durSecs = safeSong.duration ? parseDurationToSeconds(safeSong.duration) : null;
     const durationParam = durSecs && durSecs > 0 ? durSecs : null;
     invoke<{ synced: string | null; plain: string | null }>('get_song_lyrics', {
-      title: song.title,
-      artist: song.artist,
+      title: safeSong.title,
+      artist: safeSong.artist,
       durationSecs: durationParam
     }).then(res => {
       this.lyrics = res;
@@ -416,17 +425,17 @@ class PlayerState {
     try {
       // 1. Check ultra-fast in-memory stream cache
       let streamRes: StreamResult | null = null;
-      const cached = this.streamCache.get(song.id);
+      const cached = this.streamCache.get(safeSong.id);
       if (cached && Date.now() - cached.timestamp < 3.5 * 60 * 60 * 1000) {
         streamRes = cached.result;
       }
 
       if (!streamRes) {
         streamRes = await invoke<StreamResult>('get_stream', { 
-          song, 
+          song: safeSong, 
           autoSave: false 
         });
-        this.streamCache.set(song.id, { result: streamRes, timestamp: Date.now() });
+        this.streamCache.set(safeSong.id, { result: streamRes, timestamp: Date.now() });
       }
 
       this.isCached = streamRes.is_cached;
@@ -435,7 +444,7 @@ class PlayerState {
         let loadedBlob = false;
         try {
           // 1. High-speed direct byte loading into a Blob URL (100% immune to asset protocol restrictions)
-          const bytes = await invoke<number[]>('get_cached_audio_bytes', { videoId: song.id });
+          const bytes = await invoke<number[]>('get_cached_audio_bytes', { videoId: safeSong.id });
           if (bytes && bytes.length > 0) {
             const blob = new Blob([new Uint8Array(bytes)], { type: 'audio/mp4' });
             if (this.currentBlobUrl) {

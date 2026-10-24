@@ -110,41 +110,61 @@
     }
   }
 
+  let dragStartY = 0;
+
   // High-performance pointer drag-to-scroll handlers (Mouse only, no interference with mobile touch)
   function handlePointerDown(e: PointerEvent) {
     if (e.pointerType !== 'mouse' || e.button !== 0) return;
-    const target = e.currentTarget as HTMLElement;
     isPointerDown = true;
-    activeDragEl = target;
+    activeDragEl = e.currentTarget as HTMLElement;
     dragStartX = e.clientX;
-    dragScrollLeft = target.scrollLeft;
+    dragStartY = e.clientY;
+    dragScrollLeft = activeDragEl.scrollLeft;
     didDrag = false;
-    try {
-      target.setPointerCapture(e.pointerId);
-    } catch (_) {}
+    // NOTE: Do NOT setPointerCapture on pointerdown! Setting pointer capture immediately
+    // hijacks all child click events in Chromium/WebView2, breaking card clickability.
   }
 
   function handlePointerMove(e: PointerEvent) {
     if (!isPointerDown || !activeDragEl || e.pointerType !== 'mouse') return;
     const deltaX = e.clientX - dragStartX;
-    if (Math.abs(deltaX) > 5) {
+    const deltaY = e.clientY - dragStartY;
+
+    // Only engage drag if user clearly moved horizontally > 10px
+    if (!didDrag && Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY)) {
       didDrag = true;
+      try {
+        activeDragEl.setPointerCapture(e.pointerId);
+      } catch (_) {}
+    }
+
+    if (didDrag) {
       activeDragEl.scrollLeft = dragScrollLeft - deltaX;
     }
   }
 
   function handlePointerUp(e: PointerEvent) {
     if (e.pointerType !== 'mouse') return;
-    if (activeDragEl) {
+    if (activeDragEl && didDrag) {
       try {
         activeDragEl.releasePointerCapture(e.pointerId);
       } catch (_) {}
     }
     isPointerDown = false;
     activeDragEl = null;
-    setTimeout(() => {
+
+    if (didDrag) {
+      setTimeout(() => {
+        didDrag = false;
+      }, 60);
+    } else {
       didDrag = false;
-    }, 100);
+    }
+  }
+
+  function handleCardClick(song: Song, sectionTitle: string, songList?: Song[], index?: number) {
+    if (didDrag) return;
+    player.play(song, { type: 'search', title: sectionTitle, songs: songList ?? [song] }, index);
   }
 
   function handleInput(e: Event) {
@@ -238,10 +258,8 @@
     role="button"
     tabindex="0"
     onpointerenter={() => player.prefetchStream(song)}
-    onclick={() => {
-      if (!didDrag) player.play(song, { type: 'search', title: sectionTitle, songs: songList ?? [song] }, index);
-    }}
-    onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: sectionTitle, songs: songList ?? [song] }, index); }}
+    onclick={() => handleCardClick(song, sectionTitle, songList, index)}
+    onkeydown={(e) => { if (e.key === 'Enter') handleCardClick(song, sectionTitle, songList, index); }}
     class="group flex flex-col gap-2 cursor-pointer text-left w-36 sm:w-40 md:w-44 flex-shrink-0 select-none virtual-carousel-card"
     style="touch-action: pan-x pan-y;"
   >
@@ -250,13 +268,13 @@
       <TrackImage
         src={song.thumb}
         alt={song.title}
-        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+        class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 pointer-events-none"
         iconClass="w-8 h-8 text-neutral-600"
       />
 
       <!-- Play Overlay -->
-      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-        <div class="w-10 h-10 rounded-full bg-accent text-accent-contrast flex items-center justify-center shadow-xl transform scale-90 group-hover:scale-100 transition-transform">
+      <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center pointer-events-none">
+        <div class="w-10 h-10 rounded-full bg-accent text-accent-contrast flex items-center justify-center shadow-xl transform scale-90 group-hover:scale-100 transition-transform pointer-events-none">
           <svg class="w-4 h-4 fill-current ml-0.5" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
         </div>
       </div>
@@ -264,10 +282,10 @@
 
     <!-- Title & Details directly below tile -->
     <div class="flex flex-col min-w-0 px-0.5 pointer-events-none">
-      <h3 class="text-xs sm:text-sm font-medium text-white truncate group-hover:text-accent transition-colors" title={song.title}>
+      <h3 class="text-xs sm:text-sm font-medium text-white truncate group-hover:text-accent transition-colors pointer-events-none" title={song.title}>
         {song.title}
       </h3>
-      <p class="text-[11px] sm:text-xs text-neutral-400 font-normal truncate mt-0.5" title={song.artist}>
+      <p class="text-[11px] sm:text-xs text-neutral-400 font-normal truncate mt-0.5 pointer-events-none" title={song.artist}>
         {song.artist}
       </p>
     </div>
