@@ -1,5 +1,6 @@
 <script lang="ts">
   import { jamStore } from '../jamStore.svelte';
+  import JamIcon from './JamIcon.svelte';
 
   interface Props {
     isOpen?: boolean;
@@ -80,9 +81,7 @@
             aria-label="Host Jam"
           >
             <div class="w-10 h-10 rounded-xl bg-accent/10 text-accent flex items-center justify-center group-hover:bg-accent/20 transition-colors">
-              <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.8">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9.348 14.652a3.75 3.75 0 010-5.304m5.304 0a3.75 3.75 0 010 5.304m-7.425 2.121a6.75 6.75 0 010-9.546m9.546 0a6.75 6.75 0 010 9.546M5.106 18.894a9.75 9.75 0 010-13.788m13.788 0a9.75 9.75 0 010 13.788M12 12h.008v.008H12V12z" />
-              </svg>
+              <JamIcon active={false} size={20} strokeWidth={1.8} />
             </div>
             <div class="w-1.5 h-1.5 rounded-full bg-neutral-600 group-hover:bg-accent transition-colors"></div>
           </button>
