@@ -9,6 +9,9 @@ jobs:
   attach-linux:
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Download Linux Artifact
         uses: actions/download-artifact@v4
         with:
@@ -26,12 +29,12 @@ jobs:
           if [ -n "$APPIMAGE" ]; then
             cp "$APPIMAGE" Vibes.AppImage
             ls -lh Vibes.AppImage
-            gh release upload v1.0.0 Vibes.AppImage --clobber
+            gh release upload v1.0.0 Vibes.AppImage --clobber -R ${{ github.repository }}
           fi
           DEB=$(find linux_dist -name "*.deb" | head -n 1)
           if [ -n "$DEB" ]; then
             cp "$DEB" Vibes.deb
             ls -lh Vibes.deb
-            gh release upload v1.0.0 Vibes.deb --clobber
+            gh release upload v1.0.0 Vibes.deb --clobber -R ${{ github.repository }}
           fi
           echo "Finished attaching Linux release assets!"
