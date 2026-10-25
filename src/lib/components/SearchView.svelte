@@ -10,6 +10,23 @@
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import type { SearchPage, Song } from '../types';
+  import { REGION_OPTIONS, type MoodOption } from '../recommendation';
+
+  const TRENDING_MOODS: MoodOption[] = [
+    { id: 'all', label: 'Trending Now', icon: '⚡', description: 'Live breaking hits' },
+    { id: 'charts', label: 'Top Charts', icon: '🏆', description: 'Official Top 100 Charts' },
+    { id: 'circadian', label: 'Smart Vibe', icon: '✨', description: 'Ambient rhythm' },
+    { id: 'viral', label: 'Viral 50', icon: '💥', description: 'Fastest rising' },
+    { id: 'late_night', label: 'Midnight Flow', icon: '🌙', description: 'Dark pop & synthwave' },
+    { id: 'chill', label: 'Chill & Relax', icon: '🧘', description: 'Peaceful acoustic & lofi' },
+    { id: 'energy', label: 'High Energy', icon: '🔥', description: 'Workout & phonk bass' },
+    { id: 'party', label: 'Weekend Party', icon: '🎉', description: 'Club anthems & dance' }
+  ];
+
+  let showRegionMenu = $state<boolean>(false);
+  let selectedRegionOption = $derived(
+    REGION_OPTIONS.find(r => r.code === feedStore.trendingRegion) || REGION_OPTIONS[0]
+  );
 
   let query = $derived(searchStore.query);
   let results = $derived(searchStore.results);
@@ -549,12 +566,71 @@
         {/if}
       </div>
 
-      <!-- 2. Trending -->
-      <div class="flex flex-col gap-3.5 w-full">
-        <div class="flex items-center justify-between">
-          <h2 class="text-sm sm:text-base font-semibold text-white tracking-tight">Trending</h2>
-          <div class="flex items-center gap-1.5">
+      <!-- 2. Trending (Super Legendary Multi-Chart & Mood Engine) -->
+      <div class="flex flex-col gap-3 w-full">
+        <!-- Header with Title, Active Mood Badge, Region Switcher & Navigation -->
+        <div class="flex items-center justify-between gap-2 flex-wrap sm:flex-nowrap">
+          <div class="flex items-center gap-2 min-w-0">
+            <h2 class="text-sm sm:text-base font-semibold text-white tracking-tight">Trending</h2>
+            {#if feedStore.trendingMood === 'circadian'}
+              <span class="text-[11px] px-2 py-0.5 rounded-full bg-accent/15 text-accent font-medium flex items-center gap-1 truncate">
+                <span>{feedStore.circadianInfo.icon}</span>
+                <span class="truncate">{feedStore.circadianInfo.label}</span>
+              </span>
+            {/if}
+          </div>
+
+          <div class="flex items-center gap-2 relative">
+            <!-- Sleek Region Selector Pill -->
+            <div class="relative">
+              <button
+                type="button"
+                onclick={() => showRegionMenu = !showRegionMenu}
+                class="px-2.5 py-1 rounded-full bg-[#111114] hover:bg-[#1a1a20] text-neutral-300 hover:text-white flex items-center gap-1.5 text-xs transition-colors cursor-pointer border border-white/5 active:scale-95"
+                title="Select charts country/region"
+                aria-label="Select charts region"
+              >
+                <span class="text-xs">{selectedRegionOption.flag}</span>
+                <span class="font-normal text-[11px] sm:text-xs">{selectedRegionOption.code === 'AUTO' ? 'Auto' : selectedRegionOption.code}</span>
+                <svg class="w-2.5 h-2.5 text-neutral-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fill-rule="evenodd" d="M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z" clip-rule="evenodd" />
+                </svg>
+              </button>
+
+              {#if showRegionMenu}
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <!-- svelte-ignore a11y_no_static_element_interactions -->
+                <div class="fixed inset-0 z-40" onclick={() => showRegionMenu = false}></div>
+
+                <div class="absolute right-0 top-full mt-1.5 w-48 bg-[#141418] border border-white/10 rounded-xl shadow-2xl py-1 z-50 max-h-64 overflow-y-auto select-none backdrop-blur-md">
+                  <div class="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-neutral-500 border-b border-white/5">
+                    Charts Region
+                  </div>
+                  {#each REGION_OPTIONS as opt}
+                    <button
+                      type="button"
+                      onclick={() => {
+                        feedStore.setTrendingRegion(opt.code);
+                        showRegionMenu = false;
+                      }}
+                      class="w-full px-3 py-1.5 text-xs flex items-center justify-between text-left transition-colors cursor-pointer border-none bg-transparent hover:bg-white/[0.08] {feedStore.trendingRegion === opt.code ? 'text-accent font-medium bg-accent/10' : 'text-neutral-300'}"
+                    >
+                      <span class="flex items-center gap-2 truncate">
+                        <span>{opt.flag}</span>
+                        <span class="truncate">{opt.label}</span>
+                      </span>
+                      {#if feedStore.trendingRegion === opt.code}
+                        <span class="text-accent text-xs flex-shrink-0">✓</span>
+                      {/if}
+                    </button>
+                  {/each}
+                </div>
+              {/if}
+            </div>
+
+            <!-- Scroll carousel arrows -->
             <button
+              type="button"
               onclick={() => scrollHorizontal('trending', -1)}
               class="w-7 h-7 rounded-full bg-[#111114] hover:bg-[#1c1c22] text-neutral-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer border-none"
               title="Scroll left"
@@ -565,6 +641,7 @@
               </svg>
             </button>
             <button
+              type="button"
               onclick={() => scrollHorizontal('trending', 1)}
               class="w-7 h-7 rounded-full bg-[#111114] hover:bg-[#1c1c22] text-neutral-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer border-none"
               title="Scroll right"
@@ -577,8 +654,24 @@
           </div>
         </div>
 
+        <!-- Sleek Horizontal Mood & Pattern Chips -->
+        <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 select-none" style="touch-action: pan-x;">
+          {#each TRENDING_MOODS as moodOpt}
+            <button
+              type="button"
+              onclick={() => feedStore.setTrendingMood(moodOpt.id)}
+              class="px-2.5 sm:px-3 py-1 rounded-full text-xs flex items-center gap-1.5 transition-all duration-150 cursor-pointer flex-shrink-0 border-none select-none {feedStore.trendingMood === moodOpt.id ? 'bg-white text-black font-semibold shadow-sm scale-[1.02]' : 'bg-[#0e0e11] hover:bg-[#16161c] text-neutral-400 hover:text-white font-normal'}"
+              title={moodOpt.description}
+            >
+              <span class="text-xs">{moodOpt.id === 'circadian' ? feedStore.circadianInfo.icon : moodOpt.icon}</span>
+              <span>{moodOpt.id === 'circadian' ? feedStore.circadianInfo.label : moodOpt.label}</span>
+            </button>
+          {/each}
+        </div>
+
+        <!-- Carousel / Loading State -->
         {#if feedStore.isTrendingLoading && feedStore.trendingSongs.length === 0}
-          <div class="flex gap-4 overflow-hidden pb-3">
+          <div class="flex gap-4 overflow-hidden pb-3 pt-1">
             {#each Array(6) as _}
               <div class="flex flex-col gap-2 w-36 sm:w-40 md:w-44 flex-shrink-0 animate-pulse">
                 <div class="aspect-square bg-[#111114] rounded-xl"></div>
@@ -599,7 +692,7 @@
             onpointermove={handlePointerMove}
             onpointerup={handlePointerUp}
             onpointercancel={handlePointerUp}
-            class="horizontal-carousel flex gap-4 pb-3 pt-1 select-none cursor-grab active:cursor-grabbing"
+            class="horizontal-carousel flex gap-4 pb-3 pt-1 select-none cursor-grab active:cursor-grabbing {feedStore.isTrendingLoading ? 'opacity-60 transition-opacity' : ''}"
           >
             {#each feedStore.trendingSongs as song, i}
               {@render songCard(song, 'Trending', feedStore.trendingSongs, i)}

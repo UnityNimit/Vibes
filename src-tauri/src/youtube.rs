@@ -961,3 +961,337 @@ pub async fn get_more_similar_songs(token: &str) -> Result<SearchPage, String> {
         continuation_token: next_token,
     })
 }
+
+fn parse_music_responsive_list_item(r: &Value) -> Option<Song> {
+    let id = r
+        .pointer("/playlistItemData/videoId")
+        .or_else(|| {
+            r.pointer(
+                "/flexColumns/0/musicResponsiveListItemFlexColumnRenderer/text/runs/0/navigationEndpoint/watchEndpoint/videoId",
+            )
+        })
+        .or_else(|| r.pointer("/navigationEndpoint/watchEndpoint/videoId"))
+        .or_else(|| {
+            r.pointer(
+                "/overlay/musicItemThumbnailOverlayRenderer/content/musicPlayButtonRenderer/playNavigationEndpoint/watchEndpoint/videoId",
+            )
+        })
+        .and_then(|v| v.as_str())?;
+
+    if id.is_empty() {
+        return None;
+    }
+
+    let raw_title = r
+        .pointer("/flexColumns/0/musicResponsiveListItemFlexColumnRenderer/text/runs/0/text")
+        .or_else(|| r.pointer("/title/runs/0/text"))
+        .or_else(|| r.pointer("/title/simpleText"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
+
+    let raw_artist = r
+        .pointer("/flexColumns/1/musicResponsiveListItemFlexColumnRenderer/text/runs/0/text")
+        .or_else(|| r.pointer("/subtitle/runs/0/text"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
+
+    let (title, artist) = clean_title_and_artist(raw_title, raw_artist);
+
+    let duration = r
+        .pointer("/fixedColumns/0/musicResponsiveListItemFixedColumnRenderer/text/runs/0/text")
+        .or_else(|| {
+            r.pointer(
+                "/flexColumns/1/musicResponsiveListItemFlexColumnRenderer/text/runs/2/text",
+            )
+        })
+        .or_else(|| {
+            r.pointer(
+                "/flexColumns/1/musicResponsiveListItemFlexColumnRenderer/text/runs/4/text",
+            )
+        })
+        .or_else(|| r.pointer("/lengthText/runs/0/text"))
+        .and_then(|d| d.as_str())
+        .unwrap_or("--:--")
+        .trim()
+        .to_string();
+
+    let raw_thumb = r
+        .pointer("/thumbnail/musicThumbnailRenderer/thumbnail/thumbnails")
+        .or_else(|| r.pointer("/thumbnail/thumbnails"))
+        .and_then(|t| t.as_array())
+        .and_then(|arr| arr.last())
+        .and_then(|th| th.get("url"))
+        .and_then(|u| u.as_str())
+        .unwrap_or("");
+    let thumb = optimize_thumbnail_url(raw_thumb);
+
+    if !title.is_empty() {
+        Some(Song {
+            id: id.to_string(),
+            title,
+            artist: artist.clone(),
+            album: artist,
+            duration,
+            thumb,
+        })
+    } else {
+        None
+    }
+}
+
+pub async fn get_charts_feed(country_code: Option<&str>) -> Result<Vec<Song>, String> {
+    let gl = match country_code {
+        Some(c)
+            if !c.trim().is_empty()
+                && c.to_uppercase() != "GLOBAL"
+                && c.to_uppercase() != "AUTO" =>
+        {
+            c.trim().to_uppercase()
+        }
+        _ => "US".to_string(),
+    };
+
+    let client = reqwest::Client::new();
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        ),
+    );
+
+    let payload = json!({
+        "context": {
+            "client": {
+                "clientName": "WEB_REMIX",
+                "clientVersion": "1.20240101.01.00",
+                "hl": "en",
+                "gl": gl
+            }
+        },
+        "browseId": "FEmusic_charts"
+    });
+
+    let resp = client
+        .post("https://music.youtube.com/youtubei/v1/browse")
+        .headers(headers.clone())
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Charts request failed: {}", e))?;
+
+    let json_data: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Charts JSON parse failed: {}", e))?;
+
+    let mut songs = Vec::new();
+    let mut playlist_id: Option<String> = None;
+
+    if let Some(contents) = json_data
+        .pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents")
+        .and_then(|c| c.as_array())
+    {
+        for section in contents {
+            if let Some(carousel) = section.get("musicCarouselShelfRenderer") {
+                if let Some(items) = carousel.get("contents").and_then(|i| i.as_array()) {
+                    for it in items {
+                        if playlist_id.is_none() {
+                            if let Some(browse_id) = it
+                                .pointer("/musicTwoRowItemRenderer/navigationEndpoint/browseEndpoint/browseId")
+                                .and_then(|b| b.as_str())
+                            {
+                                playlist_id = Some(browse_id.to_string());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            if playlist_id.is_some() {
+                break;
+            }
+        }
+    }
+
+    let target_playlist = playlist_id.unwrap_or_else(|| "VLPL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI".to_string());
+
+    let playlist_payload = json!({
+        "context": {
+            "client": {
+                "clientName": "WEB_REMIX",
+                "clientVersion": "1.20240101.01.00",
+                "hl": "en",
+                "gl": gl
+            }
+        },
+        "browseId": target_playlist
+    });
+
+    if let Ok(pl_resp) = client
+        .post("https://music.youtube.com/youtubei/v1/browse")
+        .headers(headers)
+        .json(&playlist_payload)
+        .send()
+        .await
+    {
+        if let Ok(pl_json) = pl_resp.json::<Value>().await {
+            if let Some(items) = pl_json
+                .pointer("/contents/twoColumnBrowseResultsRenderer/secondaryContents/sectionListRenderer/contents/0/musicPlaylistShelfRenderer/contents")
+                .or_else(|| pl_json.pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents/0/musicPlaylistShelfRenderer/contents"))
+                .and_then(|c| c.as_array())
+            {
+                for it in items {
+                    if let Some(r) = it.get("musicResponsiveListItemRenderer") {
+                        if let Some(song) = parse_music_responsive_list_item(r) {
+                            if !songs.iter().any(|s: &Song| s.id == song.id) {
+                                songs.push(song);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(songs)
+}
+
+pub async fn get_explore_trending(country_code: Option<&str>) -> Result<Vec<Song>, String> {
+    let gl = match country_code {
+        Some(c)
+            if !c.trim().is_empty()
+                && c.to_uppercase() != "GLOBAL"
+                && c.to_uppercase() != "AUTO" =>
+        {
+            c.trim().to_uppercase()
+        }
+        _ => "US".to_string(),
+    };
+
+    let client = reqwest::Client::new();
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        ),
+    );
+
+    let payload = json!({
+        "context": {
+            "client": {
+                "clientName": "WEB_REMIX",
+                "clientVersion": "1.20240101.01.00",
+                "hl": "en",
+                "gl": gl
+            }
+        },
+        "browseId": "FEmusic_explore"
+    });
+
+    let resp = client
+        .post("https://music.youtube.com/youtubei/v1/browse")
+        .headers(headers)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Explore request failed: {}", e))?;
+
+    let json_data: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Explore JSON parse failed: {}", e))?;
+
+    let mut songs = Vec::new();
+
+    if let Some(sections) = json_data
+        .pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents")
+        .and_then(|c| c.as_array())
+    {
+        for s in sections {
+            if let Some(carousel) = s.get("musicCarouselShelfRenderer") {
+                let title = carousel
+                    .pointer("/header/musicCarouselShelfBasicHeaderRenderer/title/runs/0/text")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("");
+
+                if title.to_lowercase().contains("trending") {
+                    if let Some(items) = carousel.get("contents").and_then(|i| i.as_array()) {
+                        for it in items {
+                            if let Some(r) = it.get("musicResponsiveListItemRenderer") {
+                                if let Some(song) = parse_music_responsive_list_item(r) {
+                                    if !songs.iter().any(|s: &Song| s.id == song.id) {
+                                        songs.push(song);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(songs)
+}
+
+pub async fn get_trending_feed(country_code: Option<&str>, mood: Option<&str>) -> Result<SearchPage, String> {
+    let mut songs = Vec::new();
+    let mood_str = mood.unwrap_or("all").trim().to_lowercase();
+
+    if mood_str == "charts" {
+        if let Ok(chart_songs) = get_charts_feed(country_code).await {
+            songs.extend(chart_songs);
+        }
+    } else if mood_str == "viral" || mood_str == "all" {
+        if let Ok(explore_songs) = get_explore_trending(country_code).await {
+            for s in explore_songs {
+                if !songs.iter().any(|ex: &Song| ex.id == s.id) {
+                    songs.push(s);
+                }
+            }
+        }
+        if let Ok(chart_songs) = get_charts_feed(country_code).await {
+            for s in chart_songs {
+                if !songs.iter().any(|ex: &Song| ex.id == s.id) {
+                    songs.push(s);
+                }
+            }
+        }
+    } else {
+        let query = match mood_str.as_str() {
+            "late_night" => "Late Night Vibes Dark Pop Lo-Fi Melodies 2026",
+            "chill" => "Chill Acoustic Relaxing Peaceful Vibes 2026",
+            "energy" => "High Energy Workout Gym Motivation Bass Phonk 2026",
+            "party" => "Party Hits Viral Club Dance Anthems 2026",
+            "early_morning" => "Morning Acoustic Warm Sunshine Uplifting Chill 2026",
+            "morning" => "Deep Focus Modern Energy Pop Hits 2026",
+            "afternoon" => "Trending Midday Hits Global Pop 2026",
+            "evening" => "Sunset Golden Hour Indie R&B Chill 2026",
+            _ => "Trending Music Hits 2026",
+        };
+
+        if let Ok(search_res) = search_songs(query).await {
+            songs.extend(search_res.songs);
+        }
+    }
+
+    if songs.len() < 10 {
+        let fallback_query = format!("Top Trending Hits {} 2026", country_code.unwrap_or("Global"));
+        if let Ok(page) = search_songs(&fallback_query).await {
+            for s in page.songs {
+                if !songs.iter().any(|ex: &Song| ex.id == s.id) {
+                    songs.push(s);
+                }
+            }
+        }
+    }
+
+    Ok(SearchPage {
+        songs,
+        continuation_token: None,
+    })
+}

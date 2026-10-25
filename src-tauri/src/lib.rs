@@ -19,7 +19,8 @@ use models::{CacheItem, CacheStats, LyricsResult, Playlist, SearchPage, Song, St
 use youtube::{
     get_more_similar_songs as fetch_more_similar_songs,
     get_similar_songs as fetch_similar_songs,
-    get_suggestions, resolve_stream_url, search_continuation, search_songs,
+    get_suggestions, get_trending_feed as fetch_trending_feed, resolve_stream_url,
+    search_continuation, search_songs,
 };
 use tauri::Manager;
 
@@ -47,6 +48,11 @@ async fn get_similar_songs(video_id: String) -> Result<SearchPage, String> {
 #[tauri::command]
 async fn get_more_similar_songs(continuation_token: String) -> Result<SearchPage, String> {
     fetch_more_similar_songs(&continuation_token).await
+}
+
+#[tauri::command]
+async fn get_trending_feed(country_code: Option<String>, mood: Option<String>) -> Result<SearchPage, String> {
+    fetch_trending_feed(country_code.as_deref(), mood.as_deref()).await
 }
 
 #[tauri::command]
@@ -294,6 +300,7 @@ pub fn run() {
             search_more,
             get_similar_songs,
             get_more_similar_songs,
+            get_trending_feed,
             get_search_suggestions,
             get_stream,
             get_online_stream,
