@@ -18,6 +18,7 @@ use lyrics::fetch_lyrics;
 use models::{CacheItem, CacheStats, LyricsResult, Playlist, SearchPage, Song, StreamResult};
 use youtube::{
     get_more_similar_songs as fetch_more_similar_songs,
+    get_new_releases as fetch_new_releases,
     get_similar_songs as fetch_similar_songs,
     get_suggestions, get_trending_feed as fetch_trending_feed, resolve_stream_url,
     search_continuation, search_songs,
@@ -53,6 +54,11 @@ async fn get_more_similar_songs(continuation_token: String) -> Result<SearchPage
 #[tauri::command]
 async fn get_trending_feed(country_code: Option<String>, mood: Option<String>) -> Result<SearchPage, String> {
     fetch_trending_feed(country_code.as_deref(), mood.as_deref()).await
+}
+
+#[tauri::command]
+async fn get_new_releases(country_code: Option<String>) -> Result<Vec<Song>, String> {
+    fetch_new_releases(country_code.as_deref()).await
 }
 
 #[tauri::command]
@@ -301,6 +307,7 @@ pub fn run() {
             get_similar_songs,
             get_more_similar_songs,
             get_trending_feed,
+            get_new_releases,
             get_search_suggestions,
             get_stream,
             get_online_stream,

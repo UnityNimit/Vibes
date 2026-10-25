@@ -6,6 +6,8 @@ import { getStoredRegionPreference, saveStoredRegionPreference } from './locatio
 import { tasteProfile } from './tasteProfile.svelte';
 import { trendingService } from './trendingService';
 import { recommendedService } from './recommendedService';
+import { discoveryService } from './discoveryService';
+import { nostalgiaService } from './nostalgiaService';
 import { likedStore } from '../likedStore.svelte';
 import { savedStore } from '../savedStore.svelte';
 
@@ -223,26 +225,16 @@ export class RecommendationEngine {
     }
   }
 
-  // --- NEW TO YOU (DISCOVERY) ---
+  // --- NEW TO YOU (Super Addictive Discovery Engine) ---
 
   async refreshNewToYou(force = false) {
     if (this.newSongs.length > 0 && !force) return;
     this.isNewLoading = true;
     try {
-      const topArtists = tasteProfile.getTopArtists(2);
-      const query = topArtists.length > 0
-        ? `${topArtists.join(' ')} New Releases Discovery`
-        : 'New Music Discovery Breakthrough Releases';
-
-      const res = await invoke<SearchPage>('search_music', { query });
-      if (res && res.songs) {
-        const playedIds = new Set(Object.keys(tasteProfile.playCounts));
-        const filtered = res.songs.filter(s => !playedIds.has(s.id));
-        this.newSongs = (filtered.length > 0 ? filtered : res.songs).map(s => ({
-          ...s,
-          thumb: this.sanitizeThumb(s.thumb)
-        }));
-        this.newToken = res.continuation_token ?? null;
+      const { songs, continuationToken } = await discoveryService.generateNewToYou(force);
+      if (songs && songs.length > 0) {
+        this.newSongs = songs;
+        this.newToken = continuationToken;
         this.persistFeed();
       }
     } catch (e) {
@@ -285,50 +277,18 @@ export class RecommendationEngine {
     }
   }
 
-  // --- YOUR OLD ONES (REPEAT FAVORITES) ---
+  // --- YOUR OLD ONES (Super Addictive Repeat Favorites & Nostalgia Engine) ---
 
   async refreshOldOnes(force = false) {
     if (this.oldSongs.length > 0 && !force) return;
     this.isOldLoading = true;
     try {
-      const liked = likedStore.songs || [];
-      const saved = (savedStore.items || []).map(i => ({
-        id: i.id,
-        title: i.title,
-        artist: i.artist,
-        album: i.album,
-        duration: i.duration,
-        thumb: i.thumb
-      }));
-
-      const frequent = tasteProfile.history
-        .filter(h => h.playCount >= 2)
-        .map(h => h.song);
-
-      const seen = new Set<string>();
-      const combined: Song[] = [];
-
-      for (const song of [...frequent, ...liked, ...saved]) {
-        if (!seen.has(song.id)) {
-          seen.add(song.id);
-          combined.push({ ...song, thumb: this.sanitizeThumb(song.thumb) });
-        }
+      const { songs, continuationToken } = await nostalgiaService.generateOldOnes(force);
+      if (songs && songs.length > 0) {
+        this.oldSongs = songs;
+        this.oldToken = continuationToken;
+        this.persistFeed();
       }
-
-      if (combined.length < 8) {
-        const res = await invoke<SearchPage>('search_music', { query: 'All Time Greatest Classic Hits Throwback' }).catch(() => null);
-        if (res && res.songs) {
-          for (const s of res.songs) {
-            if (!seen.has(s.id)) {
-              seen.add(s.id);
-              combined.push({ ...s, thumb: this.sanitizeThumb(s.thumb) });
-            }
-          }
-        }
-      }
-
-      this.oldSongs = combined;
-      this.persistFeed();
     } catch (e) {
       console.error('[RecommendationEngine] Error in refreshOldOnes:', e);
     } finally {

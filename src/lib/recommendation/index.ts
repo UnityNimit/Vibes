@@ -4,4 +4,6 @@ export * from './location';
 export * from './tasteProfile.svelte';
 export * from './trendingService';
 export * from './recommendedService';
+export * from './discoveryService';
+export * from './nostalgiaService';
 export * from './recommendationEngine.svelte';

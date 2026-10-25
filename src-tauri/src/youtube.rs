@@ -1295,3 +1295,151 @@ pub async fn get_trending_feed(country_code: Option<&str>, mood: Option<&str>) -
         continuation_token: None,
     })
 }
+
+fn parse_music_two_row_item(r: &Value) -> Option<Song> {
+    let id = r
+        .pointer("/navigationEndpoint/watchEndpoint/videoId")
+        .or_else(|| r.pointer("/title/runs/0/navigationEndpoint/watchEndpoint/videoId"))
+        .and_then(|v| v.as_str())
+        .or_else(|| {
+            r.pointer("/thumbnailRenderer/musicThumbnailRenderer/thumbnail/thumbnails/0/url")
+                .and_then(|u| u.as_str())
+                .and_then(|u| {
+                    if let Some(pos) = u.find("/vi/") {
+                        let sub = &u[pos + 4..];
+                        if let Some(slash) = sub.find('/') {
+                            return Some(&sub[..slash]);
+                        }
+                    }
+                    None
+                })
+        })?;
+
+    if id.is_empty() {
+        return None;
+    }
+
+    let raw_title = r
+        .pointer("/title/runs/0/text")
+        .or_else(|| r.pointer("/title/simpleText"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
+
+    let raw_artist = r
+        .pointer("/subtitle/runs/0/text")
+        .or_else(|| r.pointer("/subtitle/simpleText"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("");
+
+    let (title, artist) = clean_title_and_artist(raw_title, raw_artist);
+
+    let raw_thumb = r
+        .pointer("/thumbnailRenderer/musicThumbnailRenderer/thumbnail/thumbnails")
+        .or_else(|| r.pointer("/thumbnail/thumbnails"))
+        .and_then(|t| t.as_array())
+        .and_then(|arr| arr.last())
+        .and_then(|th| th.get("url"))
+        .and_then(|u| u.as_str())
+        .unwrap_or("");
+    let thumb = optimize_thumbnail_url(raw_thumb);
+
+    if !title.is_empty() {
+        Some(Song {
+            id: id.to_string(),
+            title,
+            artist: artist.clone(),
+            album: artist,
+            duration: "--:--".to_string(),
+            thumb,
+        })
+    } else {
+        None
+    }
+}
+
+pub async fn get_new_releases(country_code: Option<&str>) -> Result<Vec<Song>, String> {
+    let gl = match country_code {
+        Some(c)
+            if !c.trim().is_empty()
+                && c.to_uppercase() != "GLOBAL"
+                && c.to_uppercase() != "AUTO" =>
+        {
+            c.trim().to_uppercase()
+        }
+        _ => "US".to_string(),
+    };
+
+    let client = reqwest::Client::new();
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        ),
+    );
+
+    let payload = json!({
+        "context": {
+            "client": {
+                "clientName": "WEB_REMIX",
+                "clientVersion": "1.20240101.01.00",
+                "hl": "en",
+                "gl": gl
+            }
+        },
+        "browseId": "FEmusic_explore"
+    });
+
+    let resp = client
+        .post("https://music.youtube.com/youtubei/v1/browse")
+        .headers(headers)
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("New releases request failed: {}", e))?;
+
+    let json_data: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("New releases parse failed: {}", e))?;
+
+    let mut songs = Vec::new();
+
+    if let Some(sections) = json_data
+        .pointer("/contents/singleColumnBrowseResultsRenderer/tabs/0/tabRenderer/content/sectionListRenderer/contents")
+        .and_then(|c| c.as_array())
+    {
+        for s in sections {
+            if let Some(carousel) = s.get("musicCarouselShelfRenderer") {
+                let title = carousel
+                    .pointer("/header/musicCarouselShelfBasicHeaderRenderer/title/runs/0/text")
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("")
+                    .to_lowercase();
+
+                if title.contains("new music videos") || title.contains("new albums & singles") {
+                    if let Some(items) = carousel.get("contents").and_then(|i| i.as_array()) {
+                        for it in items {
+                            if let Some(r) = it.get("musicResponsiveListItemRenderer") {
+                                if let Some(song) = parse_music_responsive_list_item(r) {
+                                    if !songs.iter().any(|s: &Song| s.id == song.id) {
+                                        songs.push(song);
+                                    }
+                                }
+                            } else if let Some(r) = it.get("musicTwoRowItemRenderer") {
+                                if let Some(song) = parse_music_two_row_item(r) {
+                                    if !songs.iter().any(|s: &Song| s.id == song.id) {
+                                        songs.push(song);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(songs)
+}
