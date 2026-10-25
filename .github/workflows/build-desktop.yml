@@ -2,8 +2,19 @@ name: Build Desktop (Windows, macOS, Linux)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'src-tauri/**'
+      - 'package.json'
+      - '.github/workflows/build-desktop.yml'
   release:
     types: [published]
+
+permissions:
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -108,3 +119,16 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: desktop_dist/*
           if-no-files-found: warn
+
+      - name: Attach Desktop Deliverables to GitHub Release v1.0.0
+        if: github.event_name == 'release' || github.ref == 'refs/heads/main'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for f in desktop_dist/*; do
+            if [ -f "$f" ]; then
+              echo "Uploading $f to release v1.0.0"
+              gh release upload v1.0.0 "$f" --clobber -R ${{ github.repository }} || true
+            fi
+          done

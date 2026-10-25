@@ -269,7 +269,7 @@
             <span id="mainDownloadIcon" class="flex-shrink-0"></span>
             <span id="mainDownloadText" class="font-bold whitespace-nowrap truncate">Download for Windows</span>
             <span id="mainDownloadBadge" class="text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-md bg-black/10 text-black/70 font-semibold flex-shrink-0 ml-1">
-              6.6 MB
+              6.3 MB
             </span>
           </div>
         </a>
@@ -277,8 +277,19 @@
         <!-- Dynamic 1-line installation helper note with locked single-line height -->
         <div class="h-4 sm:h-5 w-full flex items-center justify-center overflow-hidden">
           <p id="platformHelperNote" class="trans-content text-[11px] text-neutral-400 font-normal leading-none text-center whitespace-nowrap truncate px-1">
-            Portable EXE • No install needed
+            Portable Standalone • No installation required
           </p>
+        </div>
+
+        <!-- Dynamic secondary alternative link (e.g. .deb on Linux, releases) -->
+        <div id="secondaryLinkWrapper" class="h-3.5 w-full flex items-center justify-center overflow-hidden -mt-0.5">
+          <a
+            id="secondaryFormatLink"
+            href="https://github.com/UnityNimit/Vibes/releases/tag/v1.0.0"
+            class="trans-content text-[10px] sm:text-[11px] text-neutral-500 hover:text-neutral-300 font-normal underline underline-offset-2 transition-colors cursor-pointer"
+          >
+            Also available on GitHub Releases
+          </a>
         </div>
       </div>
 
@@ -323,25 +334,31 @@
       ios: {
         name: 'iOS',
         text: 'Download for iOS',
-        badge: '2.5 MB',
+        badge: '2.4 MB',
         url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.ipa',
         note: 'Direct IPA • Sideload ready',
+        secondaryText: 'Install via AltStore / Sideloadly / TrollStore',
+        secondaryUrl: 'https://github.com/UnityNimit/Vibes/releases/tag/v1.0.0',
         icon: `<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.61-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76 1.01.08 2.06-.51 2.68-1.26z"/></svg>`
       },
       android: {
         name: 'Android',
         text: 'Download for Android',
-        badge: '14.2 MB',
+        badge: '13.6 MB',
         url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.apk',
         note: 'Universal APK • Android 7.0+',
+        secondaryText: 'Verified Standalone APK Release',
+        secondaryUrl: 'https://github.com/UnityNimit/Vibes/releases/tag/v1.0.0',
         icon: `<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-1.0003s.4482-1.0003.9993-1.0003c.5516 0 .9998.4486.9998 1.0003s-.4482 1.0003-.9998 1.0003m-11.046 0c-.5511 0-.9993-.4486-.9993-1.0003s.4482-1.0003.9993-1.0003c.5516 0 .9998.4486.9998 1.0003s-.4482 1.0003-.9998 1.0003m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.4116 13.8533 8.0818 12 8.0818s-3.5902.3298-5.1368.8679L4.8409 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1021-2.6889-7.5743-6.1185-9.4396"/></svg>`
       },
       windows: {
         name: 'Windows',
         text: 'Download for Windows',
-        badge: '6.6 MB',
+        badge: '6.3 MB',
         url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.exe',
-        note: 'Portable EXE • No install needed',
+        note: 'Portable Standalone • No installation required',
+        secondaryText: 'Also available on GitHub Releases',
+        secondaryUrl: 'https://github.com/UnityNimit/Vibes/releases/tag/v1.0.0',
         icon: `<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.901-1.751"/></svg>`
       },
       macos: {
@@ -349,7 +366,9 @@
         text: 'Download for Mac',
         badge: '5.8 MB',
         url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.dmg',
-        note: 'Universal DMG • Apple & Intel',
+        note: 'Universal DMG • Apple Silicon & Intel Macs',
+        secondaryText: 'Also available on GitHub Releases',
+        secondaryUrl: 'https://github.com/UnityNimit/Vibes/releases/tag/v1.0.0',
         icon: `<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.61-.75 1.04-1.8 0.92-2.85-.9.04-2 .6-2.65 1.35-.58.66-1.08 1.73-.95 2.76 1.01.08 2.06-.51 2.68-1.26z"/></svg>`
       },
       linux: {
@@ -357,7 +376,9 @@
         text: 'Download for Linux',
         badge: '78.3 MB',
         url: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.AppImage',
-        note: 'Portable AppImage • 64-bit',
+        note: 'Universal AppImage • Any 64-bit Linux',
+        secondaryText: 'Or download .deb package (3.5 MB)',
+        secondaryUrl: 'https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.deb',
         icon: `<svg class="w-4 h-4 fill-current" viewBox="0 0 24 24"><path d="M12.001 2c-3.15 0-5.71 2.56-5.71 5.71 0 .61.1 1.2.28 1.76C4.461 10.38 3 12.51 3 15c0 3.31 2.69 6 6 6h6c3.31 0 6-2.69 6-6 0-2.49-1.46-4.62-3.57-5.53.18-.56.28-1.15.28-1.76 0-3.15-2.56-5.71-5.709-5.71z"/></svg>`
       }
     };
@@ -410,12 +431,23 @@
         }
       });
 
+      const secondary = document.getElementById('secondaryFormatLink');
+
       if (isImmediate) {
         btn.href = data.url;
         icon.innerHTML = data.icon;
         text.innerText = data.text;
         badge.innerText = data.badge;
         note.innerText = data.note;
+        if (secondary) {
+          if (data.secondaryText && data.secondaryUrl) {
+            secondary.innerText = data.secondaryText;
+            secondary.href = data.secondaryUrl;
+            secondary.style.display = 'inline-block';
+          } else {
+            secondary.style.display = 'none';
+          }
+        }
         return;
       }
 
@@ -424,6 +456,7 @@
       wrapper.style.transform = 'translate3d(0, -6px, 0) scale(0.98)';
       note.style.opacity = '0';
       note.style.transform = 'translate3d(0, -3px, 0)';
+      if (secondary) secondary.style.opacity = '0';
 
       setTimeout(() => {
         btn.href = data.url;
@@ -431,6 +464,15 @@
         text.innerText = data.text;
         badge.innerText = data.badge;
         note.innerText = data.note;
+        if (secondary) {
+          if (data.secondaryText && data.secondaryUrl) {
+            secondary.innerText = data.secondaryText;
+            secondary.href = data.secondaryUrl;
+            secondary.style.display = 'inline-block';
+          } else {
+            secondary.style.display = 'none';
+          }
+        }
 
         // Position for slide-in from below
         wrapper.style.transform = 'translate3d(0, 6px, 0) scale(0.98)';
@@ -444,6 +486,7 @@
         wrapper.style.transform = 'translate3d(0, 0, 0) scale(1)';
         note.style.opacity = '1';
         note.style.transform = 'translate3d(0, 0, 0)';
+        if (secondary) secondary.style.opacity = '1';
       }, 140);
     }
 
