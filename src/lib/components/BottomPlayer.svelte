@@ -11,6 +11,8 @@
   import PlayPauseIcon from './PlayPauseIcon.svelte';
   import HeartIcon from './HeartIcon.svelte';
   import DownloadIcon from './DownloadIcon.svelte';
+  import PrevIcon from './PrevIcon.svelte';
+  import NextIcon from './NextIcon.svelte';
 
   interface Props {
     currentTab?: 'search' | 'liked' | 'saved' | 'playlists' | 'jam' | 'settings' | 'now_playing';
@@ -286,9 +288,7 @@
             class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-300 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150 cursor-pointer flex-shrink-0"
             aria-label="Next track"
           >
-            <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
-              <path d="M17 6a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1zm-11.3 1.3a1 1 0 0 1 1.6-.8l7 5a1 1 0 0 1 0 1.6l-7 5a1 1 0 0 1-1.6-.8v-10z"/>
-            </svg>
+            <NextIcon size={20} />
           </button>
         </div>
       </div>
@@ -414,9 +414,7 @@
           title="Previous track"
           aria-label="Previous track"
         >
-          <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
-            <path d="M7 6a1 1 0 0 0-1 1v10a1 1 0 1 0 2 0V7a1 1 0 0 0-1-1zm11.3 1.3a1 1 0 0 0-1.6-.8l-7 5a1 1 0 0 0 0 1.6l7 5a1 1 0 0 0 1.6-.8v-10z"/>
-          </svg>
+          <PrevIcon size={20} />
         </button>
 
         <!-- Play / Pause -->
@@ -440,9 +438,7 @@
           title="Next track"
           aria-label="Next track"
         >
-          <svg class="w-5 h-5 fill-current" viewBox="0 0 24 24">
-            <path d="M17 6a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1zm-11.3 1.3a1 1 0 0 1 1.6-.8l7 5a1 1 0 0 1 0 1.6l-7 5a1 1 0 0 1-1.6-.8v-10z"/>
-          </svg>
+          <NextIcon size={20} />
         </button>
 
         <!-- Repeat / Shuffle (Custom Morphing Icon: Line -> Circle -> 8 Loop Shuffle -> Line) -->

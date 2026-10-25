@@ -13,6 +13,9 @@
   import PlayPauseIcon from './PlayPauseIcon.svelte';
   import HeartIcon from './HeartIcon.svelte';
   import DownloadIcon from './DownloadIcon.svelte';
+  import PrevIcon from './PrevIcon.svelte';
+  import NextIcon from './NextIcon.svelte';
+  import BackIcon from './BackIcon.svelte';
   import WaveProgressBar from './WaveProgressBar.svelte';
   import type { SearchPage, Song } from '../types';
 
@@ -435,9 +438,7 @@
           class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer -ml-2"
           aria-label="Close bigger player"
         >
-          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
-          </svg>
+          <BackIcon size={24} strokeWidth={2.2} direction="down" />
         </button>
 
         <!-- Top Center: Playing Context -->
@@ -614,9 +615,7 @@
           class="w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-90 transition-all cursor-pointer"
           aria-label="Previous track"
         >
-          <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24">
-            <path d="M7 6a1 1 0 0 0-1 1v10a1 1 0 1 0 2 0V7a1 1 0 0 0-1-1zm11.3 1.3a1 1 0 0 0-1.6-.8l-7 5a1 1 0 0 0 0 1.6l7 5a1 1 0 0 0 1.6-.8v-10z"/>
-          </svg>
+          <PrevIcon size={28} />
         </button>
 
         <!-- 3. Play / Pause (Large Center Button, Outer Circle Removed, Bigger Icon) -->
@@ -638,9 +637,7 @@
           class="w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-90 transition-all cursor-pointer"
           aria-label="Next track"
         >
-          <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24">
-            <path d="M17 6a1 1 0 0 1 1 1v10a1 1 0 1 1-2 0V7a1 1 0 0 1 1-1zm-11.3 1.3a1 1 0 0 1 1.6-.8l7 5a1 1 0 0 1 0 1.6l-7 5a1 1 0 0 1-1.6-.8v-10z"/>
-          </svg>
+          <NextIcon size={28} />
         </button>
 
         <!-- 5. Repeat / Shuffle Mode -->
@@ -681,9 +678,7 @@
               class="p-2 -ml-2 text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer"
               aria-label="Back to player"
             >
-              <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M15 19l-7-7 7-7" />
-              </svg>
+              <BackIcon size={24} strokeWidth={2.2} direction="left" />
             </button>
             <span class="text-base font-semibold text-white">Similar Vibes</span>
           </div>
