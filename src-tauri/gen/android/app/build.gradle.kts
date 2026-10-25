@@ -18,12 +18,17 @@ android {
     compileSdk = 35
     namespace = "com.vibes.music"
     defaultConfig {
-        manifestPlaceholders["usesCleartextTraffic"] = "false"
+        manifestPlaceholders["usesCleartextTraffic"] = "true"
         applicationId = "com.vibes.music"
         minSdk = 24
         targetSdk = 35
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
+    }
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
     buildTypes {
         getByName("debug") {

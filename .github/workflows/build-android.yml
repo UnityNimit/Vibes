@@ -64,7 +64,7 @@ jobs:
       - name: Build Android Universal APK via Tauri CLI
         run: |
           chmod +x src-tauri/gen/android/gradlew
-          npx tauri android build --apk --target aarch64 --ci
+          npx tauri android build --apk --target aarch64 armv7 x86_64 --ci
 
       - name: Prepare Deliverables
         run: |
@@ -87,7 +87,7 @@ jobs:
             $ZIPALIGN -f -p 4 "$RAW_APK" android_dist/Vibes.apk
 
             # Sign second with apksigner (v1 + v2 + v3 full compatibility)
-            $APKSIGNER sign --ks release.keystore --ks-key-alias vibes --ks-pass pass:vibes123 --key-pass pass:vibes123 android_dist/Vibes.apk
+            $APKSIGNER sign --ks release.keystore --ks-key-alias vibes --ks-pass pass:vibes123 --key-pass pass:vibes123 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true android_dist/Vibes.apk
             $APKSIGNER verify --verbose android_dist/Vibes.apk
             ls -lh android_dist/Vibes.apk
           fi

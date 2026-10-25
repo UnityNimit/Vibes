@@ -34,24 +34,36 @@ class MainActivity : TauriActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        hideNotificationBar()
+        try {
+            hideNotificationBar()
+        } catch (t: Throwable) {
+            android.util.Log.w("MainActivity", "hideNotificationBar error", t)
+        }
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001)
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                    requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001)
+                }
             }
+        } catch (t: Throwable) {
+            android.util.Log.w("MainActivity", "permission error", t)
         }
     }
 
     override fun onWebViewCreate(webView: WebView) {
         super.onWebViewCreate(webView)
         activeWebView = WeakReference(webView)
-        webView.settings.apply {
-            mediaPlaybackRequiresUserGesture = false
-            domStorageEnabled = true
-            databaseEnabled = true
+        try {
+            webView.settings.apply {
+                mediaPlaybackRequiresUserGesture = false
+                domStorageEnabled = true
+                databaseEnabled = true
+            }
+            webView.addJavascriptInterface(AndroidMediaInterface(this), "AndroidMediaNotification")
+        } catch (t: Throwable) {
+            android.util.Log.w("MainActivity", "onWebViewCreate settings error", t)
         }
-        webView.addJavascriptInterface(AndroidMediaInterface(this), "AndroidMediaNotification")
     }
 
     override fun onPause() {
@@ -88,20 +100,24 @@ class MainActivity : TauriActivity() {
     }
 
     private fun hideNotificationBar() {
-        WindowCompat.setDecorFitsSystemWindows(window, false)
-        val controller = WindowCompat.getInsetsController(window, window.decorView)
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        controller.hide(WindowInsetsCompat.Type.statusBars())
+        try {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            val controller = WindowCompat.getInsetsController(window, window.decorView)
+            controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+            controller?.hide(WindowInsetsCompat.Type.statusBars())
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            window.attributes.layoutInDisplayCutoutMode =
-                WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+            @Suppress("DEPRECATION")
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN
+            )
+        } catch (t: Throwable) {
+            android.util.Log.w("MainActivity", "hideNotificationBar error", t)
         }
-        @Suppress("DEPRECATION")
-        window.setFlags(
-            WindowManager.LayoutParams.FLAG_FULLSCREEN,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN
-        )
     }
 
     class AndroidMediaInterface(private val context: Context) {
