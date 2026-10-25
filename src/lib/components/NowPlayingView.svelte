@@ -823,7 +823,7 @@
   {/if}
 {:else}
   <!-- Desktop Windows Layout (100% Intact) -->
-  <div class="flex-1 h-full overflow-hidden px-6 pt-2 pb-28 md:px-8 flex flex-col justify-between items-center select-none w-full font-sans bg-black relative">
+  <div class="flex-1 h-full overflow-hidden px-4 sm:px-6 md:px-8 pt-2 pb-24 flex flex-col justify-between items-center select-none w-full font-sans bg-black relative">
   {#if player.currentSong}
     <!-- Top Bar Action Row: Now Playing Context Indicator on Left, Pure Arrow Icon on Right -->
     <div class="w-full flex items-center justify-between px-2 pt-1 flex-shrink-0 z-30">
@@ -855,10 +855,10 @@
     </div>
 
     <!-- Main Content Area: Slides Art to Left, Reveals Similar Songs on Right -->
-    <div class="flex-1 w-full flex items-center justify-center overflow-hidden py-2 min-h-0 gap-6 md:gap-10 lg:gap-16">
+    <div class="flex-1 w-full flex items-center justify-center overflow-hidden py-1 sm:py-2 min-h-0 gap-6 md:gap-10 lg:gap-16">
       <!-- Left Column: Album Art + Lyrics + Info (Smoothly glides left on toggle) -->
       <div
-        class="flex flex-col items-center justify-center transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] gap-6 flex-shrink-0 {showSimilar ? 'max-w-[48%] -translate-x-2' : 'w-full max-w-lg translate-x-0'}"
+        class="flex flex-col items-center justify-center transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] gap-3 sm:gap-4 md:gap-5 min-h-0 {showSimilar ? 'max-w-[48%] -translate-x-2' : 'w-full max-w-lg translate-x-0'}"
       >
         <!-- Album Artwork / ViMusic-style Synced Lyrics (Click to toggle smoothly) -->
         <div
@@ -866,7 +866,10 @@
           tabindex="0"
           onclick={handleArtClick}
           onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleLyrics(); } }}
-          class="relative aspect-square rounded-2xl overflow-hidden bg-[#0c0c0e] shadow-2xl flex-shrink-0 cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] {showSimilar ? 'w-56 h-56 sm:w-64 sm:h-64 md:w-72 md:h-72 lg:w-80 lg:h-80' : 'w-64 h-64 sm:w-80 sm:h-80 md:w-96 md:h-96 lg:w-[420px] lg:h-[420px]'}"
+          class="relative aspect-square rounded-2xl overflow-hidden bg-[#0c0c0e] shadow-2xl cursor-pointer transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] min-h-[160px]"
+          style={showSimilar
+            ? 'width: min(320px, calc(100vh - 280px), 100%); height: min(320px, calc(100vh - 280px), 100%); max-width: min(100%, 320px); max-height: calc(100vh - 280px);'
+            : 'width: min(420px, calc(100vh - 280px), 100%); height: min(420px, calc(100vh - 280px), 100%); max-width: min(100%, 420px); max-height: calc(100vh - 280px);'}
         >
           <!-- Album Art Image (Pure smooth GPU blur & subtle darkening) -->
           <div
@@ -896,7 +899,7 @@
             <div
               bind:this={lyricsContainerEl}
               onwheel={onUserLyricsWheel}
-              class="w-full h-full overflow-y-auto px-6 py-28 sm:py-36 flex flex-col items-center text-center gap-3 select-none no-scrollbar cursor-pointer"
+              class="w-full h-full overflow-y-auto px-6 py-16 sm:py-20 flex flex-col items-center text-center gap-3 select-none no-scrollbar cursor-pointer"
               style="-webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%); mask-image: linear-gradient(to bottom, transparent 0%, black 14%, black 86%, transparent 100%);"
             >
               {#if player.parsedLyrics.length > 0}
@@ -927,7 +930,12 @@
         </div>
 
         <!-- Title, Artist & Like (Directly below art with Highest Refresh Rate Smooth Marquee) -->
-        <div class="flex items-center justify-between w-full max-w-md sm:max-w-lg px-2 gap-4">
+        <div
+          class="flex items-center justify-between w-full px-2 gap-4 flex-shrink-0"
+          style={showSimilar
+            ? 'max-width: min(320px, calc(100vh - 280px), 100%);'
+            : 'max-width: min(420px, calc(100vh - 280px), 100%);'}
+        >
           <div class="flex flex-col min-w-0 flex-1 overflow-hidden">
             <div class="flex items-center gap-2 w-full">
               <div
@@ -986,7 +994,8 @@
 
       <!-- Right Column: Queue / Songs List (No headings, no separators, seamless animation) -->
       <div
-        class="flex flex-col justify-center h-full max-h-[75vh] transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden {showSimilar ? 'flex-1 max-w-md lg:max-w-lg opacity-100 translate-x-0' : 'w-0 max-w-0 opacity-0 translate-x-12 pointer-events-none'}"
+        class="flex flex-col justify-center h-full transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] overflow-hidden {showSimilar ? 'flex-1 max-w-md lg:max-w-lg opacity-100 translate-x-0' : 'w-0 max-w-0 opacity-0 translate-x-12 pointer-events-none'}"
+        style="max-height: calc(100vh - 230px);"
       >
         <div
           bind:this={similarScrollEl}
