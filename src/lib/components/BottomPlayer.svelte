@@ -9,6 +9,8 @@
   import TrackImage from './TrackImage.svelte';
   import RepeatIcon from './RepeatIcon.svelte';
   import PlayPauseIcon from './PlayPauseIcon.svelte';
+  import HeartIcon from './HeartIcon.svelte';
+  import DownloadIcon from './DownloadIcon.svelte';
 
   interface Props {
     currentTab?: 'search' | 'liked' | 'saved' | 'playlists' | 'jam' | 'settings' | 'now_playing';
@@ -402,9 +404,7 @@
           title={player.isLiked ? 'Unlike' : 'Like'}
           aria-label={player.isLiked ? 'Unlike' : 'Like'}
         >
-          <svg class="w-5 h-5 {player.isLiked ? 'fill-current' : 'fill-none'}" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-          </svg>
+          <HeartIcon isLiked={player.isLiked} size={20} strokeWidth={2} />
         </button>
 
         <!-- Prev -->
@@ -566,19 +566,7 @@
         title={player.isDownloading ? 'Downloading...' : player.isCached ? 'Saved offline (click to remove)' : 'Download for offline playback'}
         aria-label="Download or remove song"
       >
-        {#if player.isDownloading}
-          <div class="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
-        {:else if player.isCached}
-          <!-- Saved Tick Icon -->
-          <svg class="w-4 h-4 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-          </svg>
-        {:else}
-          <!-- Download Icon -->
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-          </svg>
-        {/if}
+        <DownloadIcon isDownloading={player.isDownloading} isSaved={player.isCached} size={18} strokeWidth={2} />
       </button>
 
 
