@@ -64,7 +64,7 @@ jobs:
       - name: Build Android Universal APK via Tauri CLI
         run: |
           chmod +x src-tauri/gen/android/gradlew
-          npx tauri android build --apk --target aarch64 --ci -- -x lint
+          npx tauri android build --apk --target aarch64 --ci
 
       - name: Prepare Deliverables
         run: |
