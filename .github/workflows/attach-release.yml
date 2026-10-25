@@ -1,0 +1,37 @@
+name: Attach Linux Release Assets
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  attach-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Linux Artifact
+        uses: actions/download-artifact@v4
+        with:
+          run-id: 40132017101
+          name: Vibes-Linux-x64
+          path: linux_dist
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Prepare and Upload to Release v1.0.0
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ls -la linux_dist/
+          APPIMAGE=$(find linux_dist -name "*.AppImage" | head -n 1)
+          if [ -n "$APPIMAGE" ]; then
+            cp "$APPIMAGE" Vibes.AppImage
+            ls -lh Vibes.AppImage
+            gh release upload v1.0.0 Vibes.AppImage --clobber
+          fi
+          DEB=$(find linux_dist -name "*.deb" | head -n 1)
+          if [ -n "$DEB" ]; then
+            cp "$DEB" Vibes.deb
+            ls -lh Vibes.deb
+            gh release upload v1.0.0 Vibes.deb --clobber
+          fi
+          echo "Finished attaching Linux release assets!"
