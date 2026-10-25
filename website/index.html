@@ -258,17 +258,17 @@
       </div>
 
       <!-- ==================== PRIMARY DOWNLOAD ACTION (ANIMATED CROSSFADE) ==================== -->
-      <div class="w-full max-w-[280px] sm:max-w-xs flex flex-col items-center gap-1.5 mb-1.5">
+      <div class="w-full max-w-[320px] sm:max-w-xs flex flex-col items-center gap-1.5 mb-1.5">
         <a
           id="mainDownloadBtn"
           href="https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.exe"
-          class="btn-spring w-full py-3.5 px-5 rounded-2xl bg-white text-black font-semibold text-sm sm:text-base shadow-[0_8px_30px_rgba(255,255,255,0.22)] cursor-pointer overflow-hidden flex items-center justify-center"
+          class="btn-spring w-full h-[50px] sm:h-[52px] px-4 sm:px-5 rounded-2xl bg-white text-black font-semibold text-sm shadow-[0_8px_30px_rgba(255,255,255,0.22)] cursor-pointer overflow-hidden flex items-center justify-center whitespace-nowrap"
         >
-          <!-- Dynamic Content with Smooth Kinetic Crossfade -->
-          <div id="btnContentWrapper" class="trans-content flex items-center justify-center gap-2.5 w-full">
+          <!-- Dynamic Content with Smooth Kinetic Crossfade (Locked Single Line) -->
+          <div id="btnContentWrapper" class="trans-content flex items-center justify-center gap-2 sm:gap-2.5 w-full whitespace-nowrap">
             <span id="mainDownloadIcon" class="flex-shrink-0"></span>
-            <span id="mainDownloadText" class="font-bold">Download for Windows</span>
-            <span id="mainDownloadBadge" class="text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-md bg-black/10 text-black/70 font-semibold ml-auto sm:ml-0">
+            <span id="mainDownloadText" class="font-bold whitespace-nowrap truncate">Download for Windows</span>
+            <span id="mainDownloadBadge" class="text-[10px] sm:text-[11px] font-mono px-2 py-0.5 rounded-md bg-black/10 text-black/70 font-semibold flex-shrink-0 ml-1">
               6.6 MB
             </span>
           </div>
@@ -283,7 +283,7 @@
       </div>
 
       <!-- ==================== ESSENTIAL PILLARS (Clean & Compact, NO SEPARATOR LINES) ==================== -->
-      <div class="grid grid-cols-3 gap-2 w-full max-w-[280px] sm:max-w-xs text-center mt-3 sm:mt-4">
+      <div class="grid grid-cols-3 gap-2 w-full max-w-[320px] sm:max-w-xs text-center mt-3 sm:mt-4">
         <div class="py-0.5 group cursor-default">
           <div class="text-[11px] sm:text-xs font-semibold text-white transition-transform duration-200 group-hover:scale-105">Zero Ads</div>
           <div class="text-[10px] text-neutral-500">Free forever</div>
