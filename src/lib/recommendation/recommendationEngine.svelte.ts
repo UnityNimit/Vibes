@@ -5,6 +5,7 @@ import { getCircadianInfo } from './circadian';
 import { getStoredRegionPreference, saveStoredRegionPreference } from './location';
 import { tasteProfile } from './tasteProfile.svelte';
 import { trendingService } from './trendingService';
+import { recommendedService } from './recommendedService';
 import { likedStore } from '../likedStore.svelte';
 import { savedStore } from '../savedStore.svelte';
 
@@ -170,32 +171,16 @@ export class RecommendationEngine {
     }
   }
 
-  // --- RECOMMENDED FOR YOU ---
+  // --- RECOMMENDED FOR YOU (Super Addictive Multi-Seed & Collaborative Filtering) ---
 
   async refreshRecommended(force = false) {
     if (this.recommendedSongs.length > 0 && !force) return;
     this.isRecommendedLoading = true;
     try {
-      const topSeed = tasteProfile.getFavoriteSeedSong();
-      const topArtists = tasteProfile.getTopArtists(2);
-
-      let res: SearchPage | null = null;
-      if (topSeed && topSeed.id) {
-        try {
-          res = await invoke<SearchPage>('get_similar_songs', { videoId: topSeed.id });
-        } catch {
-          // fallback
-        }
-      }
-
-      if (!res || !res.songs || res.songs.length === 0) {
-        const query = topArtists.length > 0 ? `${topArtists[0]} Radio Mix` : 'Top Hits Global';
-        res = await invoke<SearchPage>('search_music', { query });
-      }
-
-      if (res && res.songs && res.songs.length > 0) {
-        this.recommendedSongs = res.songs.map(s => ({ ...s, thumb: this.sanitizeThumb(s.thumb) }));
-        this.recommendedToken = res.continuation_token ?? null;
+      const { songs, continuationToken } = await recommendedService.generateRecommended(force);
+      if (songs && songs.length > 0) {
+        this.recommendedSongs = songs;
+        this.recommendedToken = continuationToken;
         this.persistFeed();
       }
     } catch (e) {
