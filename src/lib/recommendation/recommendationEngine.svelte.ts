@@ -407,6 +407,10 @@ export class RecommendationEngine {
     }
   }
 
+  get recentSearches(): string[] {
+    return tasteProfile.recentSearches || [];
+  }
+
   recordSearch(query: string) {
     tasteProfile.recordSearch(query);
     this.updateRecommendedSearches();

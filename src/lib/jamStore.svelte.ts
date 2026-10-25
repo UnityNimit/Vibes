@@ -279,7 +279,7 @@ class JamStore {
         this.startHostHeartbeat();
       });
 
-      this.peer.on('connection', (conn) => {
+      this.peer.on('connection', (conn: any) => {
         this.handleNewGuestConnection(conn);
       });
 
@@ -470,7 +470,7 @@ class JamStore {
             resolve(true);
           });
 
-          conn.on('data', (data) => {
+          conn.on('data', (data: any) => {
             this.handleGuestReceivedData(data as JamMessage);
           });
 
@@ -478,7 +478,7 @@ class JamStore {
             this.leaveJam();
           });
 
-          conn.on('error', (err) => {
+          conn.on('error', (err: any) => {
             console.error('[Guest Connection Error]', err);
             this.status = 'error';
             this.errorMessage = 'Failed to connect to host room';
