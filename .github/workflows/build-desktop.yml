@@ -94,8 +94,12 @@ jobs:
         if: startsWith(matrix.os, 'macos')
         run: |
           mkdir -p desktop_dist
-          # 1. Copy .dmg disk images
+          # 1. Copy .dmg disk images and guarantee canonical Vibes.dmg
           find src-tauri/target -name "*.dmg" -exec cp {} desktop_dist/ \; 2>/dev/null || true
+          RAW_DMG=$(find desktop_dist -name "*.dmg" | head -n 1)
+          if [ -n "$RAW_DMG" ]; then
+            cp "$RAW_DMG" desktop_dist/Vibes.dmg
+          fi
           # 2. Package .app bundle into zip
           APP_PATH=$(find src-tauri/target -name "*.app" -type d | head -n 1)
           if [ -n "$APP_PATH" ]; then
@@ -108,10 +112,18 @@ jobs:
         if: matrix.os == 'ubuntu-22.04'
         run: |
           mkdir -p desktop_dist
-          # 1. Copy AppImage (universal executable)
+          # 1. Copy AppImage and guarantee canonical Vibes.AppImage
           find src-tauri/target -name "*.AppImage" -exec cp {} desktop_dist/ \; 2>/dev/null || true
-          # 2. Copy Debian package (.deb)
+          RAW_APPIMAGE=$(find desktop_dist -name "*.AppImage" | head -n 1)
+          if [ -n "$RAW_APPIMAGE" ]; then
+            cp "$RAW_APPIMAGE" desktop_dist/Vibes.AppImage
+          fi
+          # 2. Copy Debian package (.deb) and guarantee canonical Vibes.deb
           find src-tauri/target -name "*.deb" -exec cp {} desktop_dist/ \; 2>/dev/null || true
+          RAW_DEB=$(find desktop_dist -name "*.deb" | head -n 1)
+          if [ -n "$RAW_DEB" ]; then
+            cp "$RAW_DEB" desktop_dist/Vibes.deb
+          fi
 
       - name: Upload Desktop Artifacts
         uses: actions/upload-artifact@v4

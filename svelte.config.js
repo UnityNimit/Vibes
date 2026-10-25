@@ -10,8 +10,15 @@ const config = {
   preprocess: vitePreprocess(),
   kit: {
     adapter: adapter({
-      fallback: "index.html",
+      pages: "build",
+      assets: "build",
+      fallback: "200.html",
+      precompress: false,
+      strict: true,
     }),
+    paths: {
+      relative: true,
+    },
   },
 };
 

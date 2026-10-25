@@ -1,4 +1,7 @@
-import { Peer, type DataConnection } from 'peerjs';
+import PeerPkg, { type DataConnection } from 'peerjs';
+// Handle both ESM named export and CommonJS default wrapper cleanly across webview/desktop
+const PeerClass = (PeerPkg as any)?.Peer || (PeerPkg as any)?.default || PeerPkg;
+type PeerInstance = InstanceType<typeof PeerClass>;
 import { player } from './player.svelte';
 import type { Song, PlaybackContext } from './types';
 
@@ -146,7 +149,7 @@ class JamStore {
   rttMs = $state<number>(0);
   driftMs = $state<number>(0);
 
-  private peer: Peer | null = null;
+  private peer: any = null;
   private connections: Map<string, DataConnection> = new Map();
   private hostConnection: DataConnection | null = null;
   private guestMeta: Map<string, { name: string; device: DevicePlatform }> = new Map();
@@ -263,7 +266,7 @@ class JamStore {
     const fullId = `${PEER_PREFIX}${code.toLowerCase()}`;
 
     try {
-      this.peer = new Peer(fullId, {
+      this.peer = new PeerClass(fullId, {
         config: {
           iceServers: ICE_SERVERS,
         },
@@ -431,7 +434,7 @@ class JamStore {
     const hostFullId = `${PEER_PREFIX}${cleanCode.toLowerCase()}`;
 
     try {
-      this.peer = new Peer({
+      this.peer = new PeerClass({
         config: {
           iceServers: ICE_SERVERS,
         },

@@ -1,6 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { Song } from './types';
-import { feedStore } from './feedStore.svelte';
 
 class LikedStore {
   songs = $state<Song[]>([]);
@@ -32,6 +31,8 @@ class LikedStore {
     try {
       const isNowLiked = await invoke<boolean>('toggle_like', { song });
       await this.refresh();
+      // Dynamically import feedStore to avoid circular module initialization
+      const { feedStore } = await import('./feedStore.svelte');
       feedStore.recordLike(song, isNowLiked);
       return isNowLiked;
     } catch (e) {
