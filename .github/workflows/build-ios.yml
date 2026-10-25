@@ -18,7 +18,9 @@ on:
       - 'src/**'
       - 'src-tauri/**'
       - 'package.json'
-      - '.github/workflows/build-ios.yml'
+      - 'svelte.config.js'
+      - 'vite.config.ts'
+      - '.github/workflows/**'
   release:
     types: [published]
 

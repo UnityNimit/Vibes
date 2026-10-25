@@ -8,16 +8,24 @@ class SavedStore {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.refresh();
-      listen('cache-updated', () => {
+      setTimeout(() => {
         this.refresh();
-      });
+        try {
+          if ((window as any).__TAURI_INTERNALS__) {
+            listen('cache-updated', () => {
+              this.refresh();
+            }).catch(() => {});
+          }
+        } catch (_) {}
+      }, 50);
     }
   }
 
   async refresh() {
     try {
-      this.items = await invoke<CacheItem[]>('get_all_cached');
+      if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+        this.items = await invoke<CacheItem[]>('get_all_cached');
+      }
     } catch (e) {
       console.error('Failed to load saved items:', e);
     }

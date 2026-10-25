@@ -12,7 +12,9 @@ export class TasteProfileStore {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.hydrate();
+      try {
+        this.hydrate();
+      } catch (_) {}
     }
   }
 

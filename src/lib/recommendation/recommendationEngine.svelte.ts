@@ -52,13 +52,17 @@ export class RecommendationEngine {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.trendingRegion = getStoredRegionPreference();
-      this.hydrateFromStorage();
+      try {
+        this.trendingRegion = getStoredRegionPreference();
+        this.hydrateFromStorage();
 
-      // If feed is empty or stale (> 3 hours), trigger background refresh
-      const isStale = Date.now() - this.lastUpdated > 3 * 60 * 60 * 1000;
-      if (this.trendingSongs.length === 0 || this.recommendedSongs.length === 0 || isStale) {
-        setTimeout(() => this.refreshAllFeeds(), 100);
+        // If feed is empty or stale (> 3 hours), trigger background refresh
+        const isStale = Date.now() - this.lastUpdated > 3 * 60 * 60 * 1000;
+        if (this.trendingSongs.length === 0 || this.recommendedSongs.length === 0 || isStale) {
+          setTimeout(() => this.refreshAllFeeds(), 150);
+        }
+      } catch (e) {
+        console.error('[RecommendationEngine] Constructor init error:', e);
       }
     }
   }

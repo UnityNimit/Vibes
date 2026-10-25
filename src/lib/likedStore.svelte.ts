@@ -8,14 +8,16 @@ class LikedStore {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.refresh();
+      setTimeout(() => this.refresh(), 50);
     }
   }
 
   async refresh() {
     this.isLoading = true;
     try {
-      this.songs = await invoke<Song[]>('get_liked_songs');
+      if (typeof window !== 'undefined' && (window as any).__TAURI_INTERNALS__) {
+        this.songs = await invoke<Song[]>('get_liked_songs');
+      }
     } catch (e) {
       console.error('Failed to load liked songs:', e);
     } finally {

@@ -92,11 +92,15 @@ class PlayerState {
 
       this.initAudio();
       this.initMediaBridge();
-      listen<string>('cache-updated', (event) => {
-        if (this.currentSong && event.payload === this.currentSong.id) {
-          this.isCached = true;
+      try {
+        if ((window as any).__TAURI_INTERNALS__) {
+          listen<string>('cache-updated', (event) => {
+            if (this.currentSong && event.payload === this.currentSong.id) {
+              this.isCached = true;
+            }
+          }).catch(() => {});
         }
-      });
+      } catch (_) {}
     }
   }
 

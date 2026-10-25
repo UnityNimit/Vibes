@@ -8,7 +8,13 @@ class PlaylistStore {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      this.refresh();
+      setTimeout(() => {
+        try {
+          if ((window as any).__TAURI_INTERNALS__) {
+            this.refresh();
+          }
+        } catch (_) {}
+      }, 50);
     }
   }
 

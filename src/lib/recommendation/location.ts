@@ -50,10 +50,12 @@ export function detectLocalRegionCode(): string {
 
 export function getStoredRegionPreference(): RegionCode {
   if (typeof window === 'undefined') return 'AUTO';
-  const val = localStorage.getItem(STORAGE_REGION_KEY) as RegionCode | null;
-  if (val && REGION_OPTIONS.some(r => r.code === val)) {
-    return val;
-  }
+  try {
+    const val = localStorage.getItem(STORAGE_REGION_KEY) as RegionCode | null;
+    if (val && REGION_OPTIONS.some(r => r.code === val)) {
+      return val;
+    }
+  } catch (_) {}
   return 'AUTO';
 }
 

@@ -9,7 +9,9 @@ on:
       - 'src/**'
       - 'src-tauri/**'
       - 'package.json'
-      - '.github/workflows/build-android.yml'
+      - 'svelte.config.js'
+      - 'vite.config.ts'
+      - '.github/workflows/**'
   release:
     types: [published]
 
@@ -62,7 +64,7 @@ jobs:
       - name: Build Android Universal APK via Tauri CLI
         run: |
           chmod +x src-tauri/gen/android/gradlew
-          npx tauri android build --apk --ci
+          npx tauri android build --apk --target aarch64 --ci
 
       - name: Prepare Deliverables
         run: |
@@ -74,10 +76,19 @@ jobs:
           
           if [ -n "$RAW_APK" ]; then
             echo "Found APK at $RAW_APK"
-            # Align and sign with release key so it installs seamlessly on all devices
+            BUILD_TOOLS_VERSION=$(ls $ANDROID_SDK_ROOT/build-tools | sort -V | tail -n 1)
+            ZIPALIGN="$ANDROID_SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION/zipalign"
+            APKSIGNER="$ANDROID_SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION/apksigner"
+
+            # Create signing key
             keytool -genkeypair -v -keystore release.keystore -alias vibes -keyalg RSA -keysize 2048 -validity 10000 -storepass vibes123 -keypass vibes123 -dname "CN=Vibes, OU=Vibes, O=Vibes, L=San Francisco, S=CA, C=US"
-            jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA-256 -keystore release.keystore -storepass vibes123 "$RAW_APK" vibes
-            cp "$RAW_APK" android_dist/Vibes.apk
+            
+            # Align first (4-byte page aligned for Android 11+)
+            $ZIPALIGN -f -p 4 "$RAW_APK" android_dist/Vibes.apk
+
+            # Sign second with apksigner (v1 + v2 + v3 full compatibility)
+            $APKSIGNER sign --ks release.keystore --ks-key-alias vibes --ks-pass pass:vibes123 --key-pass pass:vibes123 android_dist/Vibes.apk
+            $APKSIGNER verify --verbose android_dist/Vibes.apk
             ls -lh android_dist/Vibes.apk
           fi
 

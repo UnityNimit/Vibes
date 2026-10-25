@@ -9,7 +9,9 @@ on:
       - 'src/**'
       - 'src-tauri/**'
       - 'package.json'
-      - '.github/workflows/build-desktop.yml'
+      - 'svelte.config.js'
+      - 'vite.config.ts'
+      - '.github/workflows/**'
   release:
     types: [published]
 

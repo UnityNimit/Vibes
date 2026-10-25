@@ -22,16 +22,18 @@ class SettingsState {
 
   constructor() {
     if (typeof window !== 'undefined') {
-      const storedAutoSave = localStorage.getItem('vibes_auto_save');
-      if (storedAutoSave !== null) {
-        this.autoSave = storedAutoSave === 'true';
-      }
+      try {
+        const storedAutoSave = localStorage.getItem('vibes_auto_save');
+        if (storedAutoSave !== null) {
+          this.autoSave = storedAutoSave === 'true';
+        }
 
-      const storedTheme = localStorage.getItem('vibes_accent_theme') as AccentTheme | null;
-      if (storedTheme && THEMES.some(t => t.id === storedTheme)) {
-        this.accentTheme = storedTheme;
-      }
-      this.applyTheme(this.accentTheme);
+        const storedTheme = localStorage.getItem('vibes_accent_theme') as AccentTheme | null;
+        if (storedTheme && THEMES.some(t => t.id === storedTheme)) {
+          this.accentTheme = storedTheme;
+        }
+        this.applyTheme(this.accentTheme);
+      } catch (_) {}
     }
   }
 
