@@ -1,6 +1,7 @@
 <script lang="ts">
   import { jamStore } from '../jamStore.svelte';
   import JamIcon from './JamIcon.svelte';
+  import HeartIcon from './HeartIcon.svelte';
 
   interface Props {
     currentTab: 'search' | 'liked' | 'saved' | 'playlists' | 'jam' | 'settings' | 'now_playing';
@@ -32,9 +33,7 @@
       title="Liked Songs"
       aria-label="Liked Songs"
     >
-      <svg class="w-5 h-5 {currentTab === 'liked' ? 'fill-current' : 'fill-none'}" viewBox="0 0 24 24" stroke="currentColor">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-      </svg>
+      <HeartIcon isLiked={currentTab === 'liked'} size={20} strokeWidth={2} />
     </button>
 
     <!-- Saved Tab -->
