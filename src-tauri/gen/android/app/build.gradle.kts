@@ -39,9 +39,7 @@ android {
             }
         }
         getByName("release") {
-            optimization {
-               enable = true
-            }
+            isMinifyEnabled = false
             proguardFiles(
                 *fileTree(".") {
                   include("**/*.pro")
