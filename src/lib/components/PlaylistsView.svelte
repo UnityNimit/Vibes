@@ -10,7 +10,6 @@
   import BackIcon from './BackIcon.svelte';
   import type { Playlist, Song } from '../types';
 
-  let selectedPlaylistId = $state<string | null>(null);
   let isCreating = $state<boolean>(false);
   let newName = $state<string>('');
   let createInputEl = $state<HTMLInputElement | null>(null);
@@ -25,7 +24,7 @@
   });
 
   let selectedPlaylist = $derived<Playlist | null>(
-    playlistStore.playlists.find((p) => p.id === selectedPlaylistId) ?? null
+    playlistStore.playlists.find((p) => p.id === playlistStore.selectedPlaylistId) ?? null
   );
 
   function startCreate() {
@@ -46,7 +45,7 @@
     isCreating = false;
     newName = '';
     if (pl) {
-      selectedPlaylistId = pl.id;
+      playlistStore.selectedPlaylistId = pl.id;
     }
   }
 
@@ -72,7 +71,7 @@
   async function deleteCurrentPlaylist() {
     if (!selectedPlaylist) return;
     const id = selectedPlaylist.id;
-    selectedPlaylistId = null;
+    playlistStore.selectedPlaylistId = null;
     await playlistStore.delete(id);
   }
 
@@ -122,7 +121,7 @@
       <!-- Back Navigation Bar -->
       <div class="flex items-center justify-between min-h-10 w-full">
         <button
-          onclick={() => { selectedPlaylistId = null; isRenaming = false; }}
+          onclick={() => { playlistStore.selectedPlaylistId = null; isRenaming = false; }}
           class="flex items-center gap-2 text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer"
         >
           <BackIcon size={16} strokeWidth={2.2} direction="left" />
@@ -417,8 +416,8 @@
           <div
             role="button"
             tabindex="0"
-            onclick={() => (selectedPlaylistId = pl.id)}
-            onkeydown={(e) => { if (e.key === 'Enter') selectedPlaylistId = pl.id; }}
+            onclick={() => (playlistStore.selectedPlaylistId = pl.id)}
+            onkeydown={(e) => { if (e.key === 'Enter') playlistStore.selectedPlaylistId = pl.id; }}
             class="flex flex-col gap-2 p-2.5 rounded-2xl hover:bg-white/[0.04] transition-colors cursor-pointer group virtual-carousel-card"
           >
             <!-- Card Cover Art -->

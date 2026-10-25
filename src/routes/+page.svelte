@@ -92,22 +92,30 @@
       onSelectTab={handleSelectTab}
     />
 
-    <!-- Main Content Area (Pure black, no borders) -->
+    <!-- Main Content Area (Pure black, no borders, preserved view state) -->
     <main class="flex-1 h-full flex flex-col relative overflow-hidden bg-black">
-      {#if currentTab === 'search'}
+      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'search' ? '' : 'hidden'}">
         <SearchView />
-      {:else if currentTab === 'liked'}
+      </div>
+      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'liked' ? '' : 'hidden'}">
         <LikedView />
-      {:else if currentTab === 'saved'}
+      </div>
+      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'saved' ? '' : 'hidden'}">
         <CacheView />
-      {:else if currentTab === 'playlists'}
+      </div>
+      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'playlists' ? '' : 'hidden'}">
         <PlaylistsView />
-      {:else if currentTab === 'jam'}
+      </div>
+      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'jam' ? '' : 'hidden'}">
         <JamView />
-      {:else if currentTab === 'settings'}
+      </div>
+      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'settings' ? '' : 'hidden'}">
         <SettingsView />
-      {:else if currentTab === 'now_playing' && !isMobileView}
-        <NowPlayingView onClose={toggleNowPlaying} />
+      </div>
+      {#if !isMobileView}
+        <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'now_playing' ? '' : 'hidden'}">
+          <NowPlayingView onClose={toggleNowPlaying} />
+        </div>
       {/if}
     </main>
   </div>

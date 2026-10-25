@@ -65,12 +65,12 @@
   let isArtistOverflowing = $state<boolean>(false);
   let marqueeArtistDuration = $state<number>(10);
 
-  // Similar Songs State (Split view slide animation & infinite pagination)
+  // Similar Songs State (Split view slide animation & infinite pagination from player)
   let showSimilar = $state<boolean>(false);
-  let similarSongs = $state<Song[]>([]);
-  let similarContinuationToken = $state<string | null>(null);
-  let isLoadingSimilar = $state<boolean>(false);
-  let isLoadingMoreSimilar = $state<boolean>(false);
+  let similarSongs = $derived(player.similarSongs);
+  let similarContinuationToken = $derived(player.similarContinuationToken);
+  let isLoadingSimilar = $derived(player.isLoadingSimilar);
+  let isLoadingMoreSimilar = $derived(player.isLoadingMoreSimilar);
   let similarScrollEl = $state<HTMLDivElement | null>(null);
 
   function getCleanArtist(song: { title: string; artist: string; album?: string }): string {
@@ -142,51 +142,13 @@
     return () => ro.disconnect();
   });
 
-  async function loadSimilarSongs(songId: string) {
-    if (!songId) return;
-    isLoadingSimilar = true;
-    similarContinuationToken = null;
-    try {
-      const res = await invoke<SearchPage>('get_similar_songs', { videoId: songId });
-      similarSongs = res.songs;
-      similarContinuationToken = res.continuation_token ?? null;
-    } catch (err) {
-      console.error(err);
-      similarSongs = [];
-    } finally {
-      isLoadingSimilar = false;
-    }
-  }
-
-  async function loadMoreSimilar() {
-    if (!similarContinuationToken || isLoadingMoreSimilar || isLoadingSimilar) return;
-    isLoadingMoreSimilar = true;
-    try {
-      const existing = new Set(similarSongs.map((s) => s.id));
-      let collected: Song[] = [];
-      let token: string | null = similarContinuationToken;
-      let depth = 0;
-
-      while (token && collected.length < 16 && depth < 3) {
-        depth++;
-        const res: SearchPage = await invoke<SearchPage>('get_more_similar_songs', { continuationToken: token });
-        token = res.continuation_token ?? null;
-        for (const s of res.songs) {
-          if (!existing.has(s.id)) {
-            existing.add(s.id);
-            collected.push(s);
-          }
-        }
-      }
-
-      if (collected.length > 0) {
-        similarSongs = [...similarSongs, ...collected];
-      }
-      similarContinuationToken = token;
-    } catch (err) {
-      console.error(err);
-    } finally {
-      isLoadingMoreSimilar = false;
+  function handleSimilarScroll(e: Event) {
+    if (player.currentContext.type !== 'search') return;
+    const el = e.target as HTMLElement;
+    if (!el || !player.similarContinuationToken || player.isLoadingMoreSimilar || player.isLoadingSimilar) return;
+    const threshold = 1000;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight <= threshold) {
+      player.loadMoreSimilar();
     }
   }
 
@@ -211,19 +173,9 @@
     return similarSongs;
   });
 
-  function handleSimilarScroll(e: Event) {
-    if (player.currentContext.type !== 'search') return;
-    const el = e.target as HTMLElement;
-    if (!el || !similarContinuationToken || isLoadingMoreSimilar || isLoadingSimilar) return;
-    const threshold = 1000;
-    if (el.scrollHeight - el.scrollTop - el.clientHeight <= threshold) {
-      loadMoreSimilar();
-    }
-  }
-
   $effect(() => {
-    if (player.currentContext.type === 'search' && player.currentSong?.id) {
-      loadSimilarSongs(player.currentSong.id);
+    if (player.currentContext.type === 'search' && player.currentSong?.id && player.similarSongs.length === 0) {
+      player.loadSimilarQueue(player.currentSong.id);
     }
   });
 
@@ -241,7 +193,13 @@
 
   function playRightColumnSong(song: Song, index: number) {
     if (player.currentContext.type === 'search') {
-      player.play(song, { type: 'search', title: 'Similar Vibes', songs: similarSongs }, index);
+      const qIdx = player.queue.findIndex((s) => s.id === song.id);
+      if (qIdx !== -1) {
+        player.queueIndex = qIdx;
+        player.play(song);
+      } else {
+        player.play(song, { type: 'search', title: 'Similar Vibes', songs: player.similarSongs }, index);
+      }
     } else {
       player.play(song, { ...player.currentContext, songs: displayedSongs }, index);
     }

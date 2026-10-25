@@ -1,6 +1,6 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-import type { Song, StreamResult, LyricLine, PlaybackContext, PlaybackSourceType } from './types';
+import type { Song, StreamResult, LyricLine, PlaybackContext, PlaybackSourceType, SearchPage } from './types';
 import { parseDurationToSeconds } from './utils';
 import { settings } from './settings.svelte';
 import { savedStore } from './savedStore.svelte';
@@ -39,6 +39,13 @@ class PlayerState {
   parsedLyrics = $state<LyricLine[]>([]);
   activeLyricIndex = $state<number>(-1);
   isLoadingLyrics = $state<boolean>(false);
+
+  // Similar Songs Radio Queue (for continuous playback when playing from search)
+  similarSongs = $state<Song[]>([]);
+  similarContinuationToken = $state<string | null>(null);
+  isLoadingSimilar = $state<boolean>(false);
+  isLoadingMoreSimilar = $state<boolean>(false);
+  private similarPromise: Promise<void> | null = null;
 
   audio: HTMLAudioElement | null = null;
   onPlaybackChange: ((type: 'play' | 'pause' | 'seek', payload: any) => void) | null = null;
@@ -294,6 +301,81 @@ class PlayerState {
     }
   }
 
+  async loadSimilarQueue(songId: string) {
+    if (!songId) return;
+    this.isLoadingSimilar = true;
+    this.similarContinuationToken = null;
+    const currentPromise = (async () => {
+      try {
+        const res = await invoke<SearchPage>('get_similar_songs', { videoId: songId });
+        const recs = (res.songs || []).filter((s) => s.id !== songId);
+        this.similarSongs = recs;
+        this.similarContinuationToken = res.continuation_token ?? null;
+
+        // If in 'search' context and currently playing this song, queue the recommendations
+        if (this.currentContext.type === 'search' && this.currentSong?.id === songId) {
+          this.queue = [this.currentSong, ...recs];
+          this.queueIndex = 0;
+          this.currentContext.songs = [...this.queue];
+          if (!this.jamDelegate?.isGuest()) {
+            this.jamDelegate?.onHostQueueChanged?.(this.queue, this.queueIndex);
+          }
+        }
+
+        // Prefetch stream for the very next recommended track
+        if (recs.length > 0) {
+          this.prefetchStream(recs[0]);
+        }
+      } catch (err) {
+        console.error('[Similar Queue Error]', err);
+        this.similarSongs = [];
+      } finally {
+        this.isLoadingSimilar = false;
+      }
+    })();
+    this.similarPromise = currentPromise;
+    await currentPromise;
+  }
+
+  async loadMoreSimilar() {
+    if (!this.similarContinuationToken || this.isLoadingMoreSimilar || this.isLoadingSimilar) return;
+    this.isLoadingMoreSimilar = true;
+    try {
+      const existing = new Set(this.queue.map((s) => s.id));
+      let collected: Song[] = [];
+      let token: string | null = this.similarContinuationToken;
+      let depth = 0;
+
+      while (token && collected.length < 16 && depth < 3) {
+        depth++;
+        const res: SearchPage = await invoke<SearchPage>('get_more_similar_songs', { continuationToken: token });
+        token = res.continuation_token ?? null;
+        for (const s of res.songs) {
+          if (!existing.has(s.id)) {
+            existing.add(s.id);
+            collected.push(s);
+          }
+        }
+      }
+
+      if (collected.length > 0) {
+        this.similarSongs = [...this.similarSongs, ...collected];
+        if (this.currentContext.type === 'search') {
+          this.queue = [...this.queue, ...collected];
+          this.currentContext.songs = [...this.queue];
+          if (!this.jamDelegate?.isGuest()) {
+            this.jamDelegate?.onHostQueueChanged?.(this.queue, this.queueIndex);
+          }
+        }
+      }
+      this.similarContinuationToken = token;
+    } catch (err) {
+      console.error('[Load More Similar Error]', err);
+    } finally {
+      this.isLoadingMoreSimilar = false;
+    }
+  }
+
   async play(
     song: Song,
     context?: { type: PlaybackSourceType; title: string; playlistId?: string; songs?: Song[] },
@@ -322,19 +404,31 @@ class PlayerState {
 
     // Update context & queue if explicitly provided
     if (context) {
-      const songsList = context.songs && context.songs.length > 0 ? [...context.songs] : [song];
-      this.currentContext = {
-        type: context.type,
-        title: context.title,
-        playlistId: context.playlistId,
-        songs: songsList,
-      };
-      this.queue = songsList;
-      if (startIndex !== undefined && startIndex >= 0 && startIndex < songsList.length) {
-        this.queueIndex = startIndex;
+      if (context.type === 'search') {
+        // When played from search: Queue is seeded with current song and immediately populated with similar tracks!
+        this.currentContext = {
+          type: 'search',
+          title: context.title || 'Search',
+          songs: [song],
+        };
+        this.queue = [song];
+        this.queueIndex = 0;
+        this.loadSimilarQueue(song.id);
       } else {
-        const foundIdx = this.queue.findIndex((s) => s.id === song.id);
-        this.queueIndex = foundIdx !== -1 ? foundIdx : 0;
+        const songsList = context.songs && context.songs.length > 0 ? [...context.songs] : [song];
+        this.currentContext = {
+          type: context.type,
+          title: context.title,
+          playlistId: context.playlistId,
+          songs: songsList,
+        };
+        this.queue = songsList;
+        if (startIndex !== undefined && startIndex >= 0 && startIndex < songsList.length) {
+          this.queueIndex = startIndex;
+        } else {
+          const foundIdx = this.queue.findIndex((s) => s.id === song.id);
+          this.queueIndex = foundIdx !== -1 ? foundIdx : 0;
+        }
       }
       if (!fromSync) {
         this.jamDelegate?.onHostQueueChanged?.(this.queue, this.queueIndex);
@@ -661,11 +755,18 @@ class PlayerState {
     this.queueIndex = newIndex;
   }
 
-  next() {
+  async next() {
     if (this.jamDelegate?.isGuest()) {
       if (this.jamDelegate.onUserNext?.()) return;
     }
+
+    // If playing from search and similar queue is still loading, await the initial recommendations
+    if (this.currentContext.type === 'search' && this.queue.length <= 1 && this.similarPromise) {
+      await this.similarPromise;
+    }
+
     if (this.queue.length === 0) return;
+
     if (this.isShuffle) {
       if (this.queue.length === 1) {
         this.seek(0);
@@ -678,7 +779,15 @@ class PlayerState {
       }
       this.play(this.queue[nextIdx]);
     } else if (this.queueIndex < this.queue.length - 1) {
+      if (this.currentContext.type === 'search' && this.queueIndex >= this.queue.length - 3) {
+        this.loadMoreSimilar();
+      }
       this.play(this.queue[this.queueIndex + 1]);
+    } else if (this.currentContext.type === 'search' && this.similarContinuationToken) {
+      await this.loadMoreSimilar();
+      if (this.queueIndex < this.queue.length - 1) {
+        this.play(this.queue[this.queueIndex + 1]);
+      }
     }
   }
 

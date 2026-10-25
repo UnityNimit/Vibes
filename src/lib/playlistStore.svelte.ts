@@ -4,6 +4,7 @@ import type { Playlist, Song } from './types';
 class PlaylistStore {
   playlists = $state<Playlist[]>([]);
   isLoading = $state<boolean>(false);
+  selectedPlaylistId = $state<string | null>(null);
 
   constructor() {
     if (typeof window !== 'undefined') {

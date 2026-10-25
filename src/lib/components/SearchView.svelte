@@ -5,17 +5,18 @@
   import { player } from '../player.svelte';
   import { savedStore } from '../savedStore.svelte';
   import { feedStore } from '../feedStore.svelte';
+  import { searchStore } from '../searchStore.svelte';
   import { cleanArtistName, formatSongSize } from '../utils';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import type { SearchPage, Song } from '../types';
 
-  let query = $state('');
-  let results = $state<Song[]>([]);
-  let continuationToken = $state<string | null>(null);
-  let isSearching = $state(false);
-  let isLoadingMore = $state(false);
-  let hasSearched = $state(false);
+  let query = $derived(searchStore.query);
+  let results = $derived(searchStore.results);
+  let continuationToken = $derived(searchStore.continuationToken);
+  let isSearching = $derived(searchStore.isSearching);
+  let isLoadingMore = $derived(searchStore.isLoadingMore);
+  let hasSearched = $derived(searchStore.hasSearched);
   let scrollContainerEl = $state<HTMLDivElement | null>(null);
   let isMobileView = $state(isMobile());
 
@@ -53,6 +54,13 @@
     isMobileView = isMobile();
     if (feedStore.recommendedSongs.length === 0) {
       feedStore.refreshAllFeeds();
+    }
+    if (scrollContainerEl && searchStore.scrollTop > 0) {
+      requestAnimationFrame(() => {
+        if (scrollContainerEl) {
+          scrollContainerEl.scrollTop = searchStore.scrollTop;
+        }
+      });
     }
     return () => {
       if (historyTouchTimer) clearTimeout(historyTouchTimer);
@@ -168,71 +176,25 @@
   }
 
   function handleInput(e: Event) {
-    query = (e.target as HTMLInputElement).value;
+    searchStore.query = (e.target as HTMLInputElement).value;
   }
 
   async function search(searchQuery?: string) {
-    const q = (searchQuery ?? query).trim();
-    if (!q) return;
-    query = q;
-    isSearching = true;
-    hasSearched = true;
-    continuationToken = null;
-
-    feedStore.recordSearch(q);
-
-    try {
-      const page = await invoke<SearchPage>('search_music', { query: q });
-      results = page.songs;
-      continuationToken = page.continuation_token ?? null;
-      if (scrollContainerEl) {
-        scrollContainerEl.scrollTop = 0;
-      }
-      if (results.length > 0) player.prefetchStream(results[0]);
-      if (results.length > 1) player.prefetchStream(results[1]);
-    } catch (e) {
-      console.error(e);
-      results = [];
-    } finally {
-      isSearching = false;
+    await searchStore.search(searchQuery);
+    if (scrollContainerEl) {
+      scrollContainerEl.scrollTop = 0;
     }
   }
 
   async function loadMore() {
-    if (!continuationToken || isLoadingMore || isSearching) return;
-    isLoadingMore = true;
-    try {
-      const existingIds = new Set(results.map((s) => s.id));
-      let collected: Song[] = [];
-      let token: string | null = continuationToken;
-      let depth = 0;
-
-      while (token && collected.length < 16 && depth < 3) {
-        depth++;
-        const page: SearchPage = await invoke<SearchPage>('search_more', { continuationToken: token });
-        token = page.continuation_token ?? null;
-        for (const s of page.songs) {
-          if (!existingIds.has(s.id)) {
-            existingIds.add(s.id);
-            collected.push(s);
-          }
-        }
-      }
-
-      if (collected.length > 0) {
-        results = [...results, ...collected];
-      }
-      continuationToken = token;
-    } catch (e) {
-      console.error(e);
-    } finally {
-      isLoadingMore = false;
-    }
+    await searchStore.loadMore();
   }
 
   function handleScroll(e: Event) {
     const el = e.target as HTMLElement;
-    if (!el || !continuationToken || isLoadingMore || isSearching) return;
+    if (!el) return;
+    searchStore.scrollTop = el.scrollTop;
+    if (!continuationToken || isLoadingMore || isSearching) return;
     const threshold = 1000;
     if (el.scrollHeight - el.scrollTop - el.clientHeight <= threshold) {
       loadMore();
@@ -246,10 +208,7 @@
   }
 
   function clearSearch() {
-    query = '';
-    results = [];
-    continuationToken = null;
-    hasSearched = false;
+    searchStore.clear();
   }
 </script>
 
