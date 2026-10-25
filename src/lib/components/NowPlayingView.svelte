@@ -10,6 +10,7 @@
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import RepeatIcon from './RepeatIcon.svelte';
+  import PlayPauseIcon from './PlayPauseIcon.svelte';
   import WaveProgressBar from './WaveProgressBar.svelte';
   import type { SearchPage, Song } from '../types';
 
@@ -634,17 +635,11 @@
           class="relative w-16 h-16 rounded-full bg-white text-black flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-xl flex-shrink-0"
           aria-label={player.isPlaying ? 'Pause' : 'Play'}
         >
-          {#if player.isLoading}
-            <div class="w-7 h-7 border-2 border-black border-t-transparent rounded-full animate-spin"></div>
-          {:else if player.isPlaying}
-            <svg class="w-7 h-7 fill-current" viewBox="0 0 24 24">
-              <path d="M8 6a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-3 0v-9A1.5 1.5 0 0 1 8 6zm8 0a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-3 0v-9A1.5 1.5 0 0 1 16 6z"/>
-            </svg>
-          {:else}
-            <svg class="w-7 h-7 fill-current ml-1" viewBox="0 0 24 24">
-              <path d="M8.5 5.5a1.5 1.5 0 0 0-2.25 1.3v10.4a1.5 1.5 0 0 0 2.25 1.3l9-5.2a1.5 1.5 0 0 0 0-2.6l-9-5.2z"/>
-            </svg>
-          {/if}
+          <PlayPauseIcon
+            isPlaying={player.isPlaying}
+            isLoading={player.isLoading}
+            size={28}
+          />
         </button>
 
         <!-- 4. Next Track -->
