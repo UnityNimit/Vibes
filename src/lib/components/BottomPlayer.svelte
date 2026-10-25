@@ -268,13 +268,13 @@
           <!-- Play / Pause -->
           <button
             onclick={(e) => { e.stopPropagation(); player.togglePlay(); }}
-            class="relative w-11 h-11 rounded-full bg-accent text-accent-contrast flex items-center justify-center hover:opacity-90 active:scale-95 transition-all duration-150 cursor-pointer shadow-md overflow-hidden flex-shrink-0"
+            class="text-white active:scale-90 transition-transform duration-150 cursor-pointer flex items-center justify-center flex-shrink-0 p-1"
             aria-label={player.isPlaying ? 'Pause' : 'Play'}
           >
             <PlayPauseIcon
               isPlaying={player.isPlaying}
               isLoading={player.isLoading}
-              size={20}
+              size={30}
             />
           </button>
 
@@ -422,14 +422,14 @@
         <!-- Play / Pause -->
         <button
           onclick={() => player.togglePlay()}
-          class="relative w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-accent text-accent-contrast flex items-center justify-center hover:opacity-90 active:scale-95 transition-opacity duration-150 cursor-pointer shadow-md overflow-hidden flex-shrink-0"
+          class="text-white hover:scale-110 active:scale-95 transition-transform duration-150 cursor-pointer flex items-center justify-center flex-shrink-0 mx-1.5 p-1"
           title={player.isPlaying ? 'Pause' : 'Play'}
           aria-label={player.isPlaying ? 'Pause' : 'Play'}
         >
           <PlayPauseIcon
             isPlaying={player.isPlaying}
             isLoading={player.isLoading}
-            size={20}
+            size={32}
           />
         </button>
 

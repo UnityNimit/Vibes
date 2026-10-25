@@ -629,16 +629,16 @@
           </svg>
         </button>
 
-        <!-- 3. Play / Pause (Large Center Button) -->
+        <!-- 3. Play / Pause (Large Center Button, Outer Circle Removed, Bigger Icon) -->
         <button
           onclick={() => player.togglePlay()}
-          class="relative w-16 h-16 rounded-full bg-white text-black flex items-center justify-center active:scale-95 transition-all cursor-pointer shadow-xl flex-shrink-0"
+          class="text-white hover:scale-105 active:scale-90 transition-transform cursor-pointer flex items-center justify-center flex-shrink-0 p-2 mx-2"
           aria-label={player.isPlaying ? 'Pause' : 'Play'}
         >
           <PlayPauseIcon
             isPlaying={player.isPlaying}
             isLoading={player.isLoading}
-            size={28}
+            size={64}
           />
         </button>
 
