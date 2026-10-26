@@ -173,6 +173,16 @@
     return similarSongs;
   });
 
+  let queueTitle = $derived.by(() => {
+    if (player.currentContext.type === 'liked') return 'Liked Songs';
+    if (player.currentContext.type === 'saved') return player.currentContext.title || 'Saved Tracks';
+    if (player.currentContext.type === 'playlist') {
+      const pl = playlistStore.playlists.find((p) => p.id === player.currentContext.playlistId);
+      return pl?.name || player.currentContext.title || 'Playlist';
+    }
+    return 'Similar Vibes';
+  });
+
   $effect(() => {
     if (player.currentContext.type === 'search' && player.currentSong?.id && player.similarSongs.length === 0) {
       player.loadSimilarQueue(player.currentSong.id);
@@ -180,7 +190,7 @@
   });
 
   $effect(() => {
-    if (showSimilar && player.currentContext.type !== 'search' && player.currentSong?.id) {
+    if ((showSimilar || showSimilarMobile) && player.currentContext.type !== 'search' && player.currentSong?.id) {
       requestAnimationFrame(() => {
         if (!similarScrollEl) return;
         const activeNode = similarScrollEl.querySelector(`[data-song-id="${player.currentSong?.id}"]`) as HTMLElement;
@@ -384,20 +394,22 @@
 {#if isMobileView}
   {#if player.currentSong}
     <div
-      class="w-full h-full flex flex-col justify-between items-center select-none font-sans bg-black px-5 relative overflow-hidden"
-      style="padding-top: max(env(safe-area-inset-top, 0px), 8px); padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);"
+      class="w-full h-full flex flex-col justify-between items-center select-none font-sans bg-black relative overflow-hidden"
+      style="padding-top: env(safe-area-inset-top, 0px); padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);"
     >
       <!-- Top Action Row: Top-Left Down Chevron, Top-Center Context, Top-Right Similar Songs Arrow -->
-      <div class="w-full flex items-center justify-between flex-shrink-0 z-20">
-        <!-- Top Left: Down Chevron / Close Arrow -->
-        <button
-          type="button"
-          onclick={onClose}
-          class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer -ml-2"
-          aria-label="Close bigger player"
-        >
-          <BackIcon size={24} strokeWidth={2.2} direction="down" />
-        </button>
+      <div class="h-12 w-full flex items-center justify-between flex-shrink-0 z-20">
+        <!-- Top Left: Down Chevron / Close Arrow in w-12 column matching TopBar Logo -->
+        <div class="w-12 h-full flex items-center justify-center flex-shrink-0">
+          <button
+            type="button"
+            onclick={onClose}
+            class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer"
+            aria-label="Close bigger player"
+          >
+            <BackIcon size={24} strokeWidth={2.2} direction="down" />
+          </button>
+        </div>
 
         <!-- Top Center: Playing Context -->
         <div class="flex flex-col items-center justify-center min-w-0 px-2 text-center">
@@ -407,21 +419,23 @@
           </span>
         </div>
 
-        <!-- Top Right: Arrow to Open Similar Songs List -->
-        <button
-          type="button"
-          onclick={() => (showSimilarMobile = true)}
-          class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer -mr-2"
-          aria-label="Open similar songs"
-        >
-          <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-          </svg>
-        </button>
+        <!-- Top Right: Arrow to Open Similar Songs List in w-12 column -->
+        <div class="w-12 h-full flex items-center justify-center flex-shrink-0">
+          <button
+            type="button"
+            onclick={() => (showSimilarMobile = true)}
+            class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer"
+            aria-label="Open queue and similar tracks"
+          >
+            <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+            </svg>
+          </button>
+        </div>
       </div>
 
       <!-- Main Art in the Centre (Tap for Synced Lyrics) -->
-      <div class="flex-1 w-full flex flex-col items-center justify-center min-h-0 my-auto py-2">
+      <div class="flex-1 w-full px-5 flex flex-col items-center justify-center min-h-0 my-auto py-2">
         <div
           role="button"
           tabindex="0"
@@ -604,7 +618,7 @@
           class="w-11 h-11 rounded-full flex items-center justify-center text-neutral-400 active:scale-90 transition-all cursor-pointer {player.repeatMode !== 'off' ? 'text-accent' : ''}"
           aria-label="Toggle repeat or shuffle mode"
         >
-          <RepeatIcon mode={player.repeatMode} size={22} />
+          <RepeatIcon mode={player.repeatMode} size={33} />
         </button>
       </div>
 
@@ -622,34 +636,44 @@
         </button>
       </div>
 
-      <!-- Slide-over Similar Songs List (Sliding in from Right with Pure Black Background) -->
+      <!-- Slide-over Similar Songs / Queue Drawer (Sliding in from Right with Pure Black Background) -->
       <div
         class="absolute inset-0 bg-black z-40 flex flex-col transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] {showSimilarMobile ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none'}"
-        style="padding-top: max(env(safe-area-inset-top, 0px), 8px); padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);"
+        style="padding-top: env(safe-area-inset-top, 0px); padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px);"
       >
-        <!-- Header with Back Button -->
-        <div class="w-full flex items-center justify-between px-5 pt-3 pb-3 border-b border-white/10 flex-shrink-0">
-          <div class="flex items-center gap-2">
-            <button
-              type="button"
-              onclick={() => (showSimilarMobile = false)}
-              class="p-2 -ml-2 text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer"
-              aria-label="Back to player"
-            >
-              <BackIcon size={24} strokeWidth={2.2} direction="left" />
-            </button>
-            <span class="text-base font-semibold text-white">Similar Vibes</span>
+        <!-- Header with Back Button (Standardized h-12 height, exact TopBar baseline & horizontal alignment) -->
+        <div class="h-12 w-full flex items-center justify-between flex-shrink-0 bg-black pr-4 border-none select-none">
+          <div class="flex items-center h-full min-w-0">
+            <!-- Back Button in w-12 column aligned precisely with TopBar Logo and Sidebar -->
+            <div class="w-12 h-full flex items-center justify-center flex-shrink-0">
+              <button
+                type="button"
+                onclick={() => (showSimilarMobile = false)}
+                class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer"
+                aria-label="Back to player"
+              >
+                <BackIcon size={24} strokeWidth={2.2} direction="left" />
+              </button>
+            </div>
+
+            <!-- Dynamic Queue Title (pl-3 offset matching TopBar, exact typography) -->
+            <div class="pl-3 flex items-center min-w-0 flex-shrink-0">
+              <h2 class="text-xl font-bold text-white tracking-tight font-sans select-none leading-none truncate max-w-[200px]">
+                {queueTitle}
+              </h2>
+            </div>
           </div>
-          <span class="text-xs font-mono text-neutral-500">
-            {displayedSongs.length} tracks
+
+          <span class="text-xs font-mono text-neutral-500 pr-1 flex-shrink-0">
+            {displayedSongs.length} {displayedSongs.length === 1 ? 'track' : 'tracks'}
           </span>
         </div>
 
-        <!-- Scrollable Similar Songs List -->
+        <!-- Scrollable Songs List -->
         <div
           bind:this={similarScrollEl}
           onscroll={handleSimilarScroll}
-          class="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-1.5 no-scrollbar"
+          class="flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-1.5 no-scrollbar"
         >
           {#if player.currentContext.type === 'search' && isLoadingSimilar}
             <div class="flex flex-col items-center justify-center py-24 gap-3 text-neutral-500">
@@ -668,7 +692,7 @@
                 class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group {isPlayingThis ? 'bg-accent/15' : 'active:bg-white/10'}"
               >
                 <div class="w-12 h-12 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
-                  <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" />
+                  <TrackImage src={song.thumb} songId={song.id} alt={song.title} class="w-full h-full object-cover" />
                 </div>
                 <div class="flex-1 min-w-0">
                   <h4 class="text-sm font-medium truncate {isPlayingThis ? 'text-accent' : 'text-white'}">
@@ -694,7 +718,7 @@
             {/if}
           {:else}
             <div class="py-20 text-center text-xs font-mono text-neutral-500">
-              NO TRACKS FOUND
+              {player.currentContext.type === 'search' ? 'NO SIMILAR TRACKS FOUND' : 'NO TRACKS IN THIS CONTEXT'}
             </div>
           {/if}
         </div>

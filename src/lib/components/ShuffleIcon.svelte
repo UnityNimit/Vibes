@@ -7,7 +7,7 @@
     size?: number | string;
   }
 
-  let { active = false, class: className = '', size = 20 }: Props = $props();
+  let { active = false, class: className = '', size = 30 }: Props = $props();
 
   // 14 floats per arrow:
   // [x0, y0, c1x, c1y, c2x, c2y, x1, y1, bx1, by1, tx, ty, bx2, by2]

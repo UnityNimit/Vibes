@@ -1,31 +1,25 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { invoke } from '@tauri-apps/api/core';
+  import { listen } from '@tauri-apps/api/event';
   import { isMobile } from '../platform';
   import { player } from '../player.svelte';
+  import { savedStore } from '../savedStore.svelte';
   import { formatBytes } from '../utils';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import type { CacheItem, CacheStats, Song } from '../types';
 
-  let cachedItems = $state<CacheItem[]>([]);
+  let cachedItems = $derived(savedStore.items);
   let stats = $state<CacheStats>({ total_songs: 0, total_size_mb: 0 });
   let isLoading = $state(true);
   let isMobileView = $state(isMobile());
 
-  onMount(() => {
-    isMobileView = isMobile();
-  });
-
   async function loadCache() {
     isLoading = true;
     try {
-      const [items, s] = await Promise.all([
-        invoke<CacheItem[]>('get_all_cached'),
-        invoke<CacheStats>('get_stats'),
-      ]);
-      cachedItems = items;
-      stats = s;
+      await savedStore.refresh();
+      stats = await invoke<CacheStats>('get_stats');
     } catch (e) {
       console.error(e);
     } finally {
@@ -33,15 +27,29 @@
     }
   }
 
-  $effect(() => {
+  onMount(() => {
+    isMobileView = isMobile();
     loadCache();
+
+    let unlisten: (() => void) | undefined;
+    listen('cache-updated', async () => {
+      await savedStore.refresh();
+      try {
+        stats = await invoke<CacheStats>('get_stats');
+      } catch (_) {}
+    }).then((u) => { unlisten = u; }).catch(() => {});
+
+    return () => {
+      if (unlisten) unlisten();
+    };
   });
 
   async function deleteItem(id: string, e: MouseEvent) {
     e.stopPropagation();
     try {
       await invoke('delete_cache', { id });
-      await loadCache();
+      await savedStore.refresh();
+      stats = await invoke<CacheStats>('get_stats');
     } catch (err) {
       console.error(err);
     }

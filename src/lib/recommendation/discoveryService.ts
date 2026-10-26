@@ -3,7 +3,7 @@ import type { Song, SearchPage } from '../types';
 import { tasteProfile } from './tasteProfile.svelte';
 import { likedStore } from '../likedStore.svelte';
 import { savedStore } from '../savedStore.svelte';
-import { resolveEffectiveCountryCode, detectLocalRegionCode } from './location';
+import { detectLocalRegionCode } from './location';
 
 interface ScoredDiscovery {
   song: Song;
@@ -11,6 +11,9 @@ interface ScoredDiscovery {
 }
 
 export class DiscoveryService {
+  private discoveryQueries: string[] = [];
+  private queryIndex = 0;
+
   private sanitizeThumb(url?: string): string {
     if (!url) return '';
     if (url.includes('/maxresdefault.jpg')) {
@@ -20,14 +23,12 @@ export class DiscoveryService {
   }
 
   /**
-   * Generates a super-addictive "New to You" discovery feed.
-   * Features genuine fresh drops from favorite artists & breakthrough releases,
-   * strictly filtering out any track the user has already played, liked, or saved.
+   * Compiles strict novelty blocklist:
+   * Any track user has played, liked, or saved is strictly excluded from "New to You".
    */
-  async generateNewToYou(force = false): Promise<{ songs: Song[]; continuationToken: string | null }> {
-    // 1. Compile strict novelty blocklist
-    const playedIds = new Set<string>(Object.keys(tasteProfile.playCounts));
-    for (const h of tasteProfile.history) {
+  private getNoveltyBlocklist(): Set<string> {
+    const playedIds = new Set<string>(Object.keys(tasteProfile.playCounts || {}));
+    for (const h of tasteProfile.history || []) {
       if (h.song?.id) playedIds.add(h.song.id);
     }
     for (const s of likedStore.songs || []) {
@@ -36,13 +37,44 @@ export class DiscoveryService {
     for (const i of savedStore.items || []) {
       if (i.id) playedIds.add(i.id);
     }
+    return playedIds;
+  }
 
-    const topArtists = tasteProfile.getTopArtists(6);
+  /**
+   * Generates a super-addictive "New to You" discovery feed.
+   * Features genuine fresh drops from favorite artists & breakthrough releases,
+   * strictly filtering out any track the user has already played, liked, or saved.
+   */
+  async generateNewToYou(force = false): Promise<{ songs: Song[]; continuationToken: string | null }> {
+    const playedIds = this.getNoveltyBlocklist();
+    const topArtists = tasteProfile.getTopArtists(8);
     const topArtistsLower = new Set(topArtists.map(a => a.toLowerCase()));
     const countryCode = detectLocalRegionCode();
 
     const candidateMap = new Map<string, ScoredDiscovery>();
     let continuationToken: string | null = null;
+
+    // Prepare infinite discovery queries for this and subsequent pagination
+    const baseQueries: string[] = [];
+    for (const artist of topArtists.slice(3)) {
+      baseQueries.push(`${artist} Latest Single New Music 2026`);
+    }
+    baseQueries.push(
+      'Indie Breakthrough New Music 2026',
+      'Fresh Alternative Pop Drops 2026',
+      'Emerging Underground R&B Soul 2026',
+      'New Electronic Dance Releases 2026',
+      'New Acoustic Folk Singer Songwriter 2026',
+      'Fresh Melodic Hip Hop Drops 2026',
+      'Global Breakthrough Emerging Artists 2026'
+    );
+    // Shuffle
+    for (let i = baseQueries.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [baseQueries[i], baseQueries[j]] = [baseQueries[j], baseQueries[i]];
+    }
+    this.discoveryQueries = baseQueries;
+    this.queryIndex = 0;
 
     const queries: Promise<Song[]>[] = [];
 
@@ -53,7 +85,7 @@ export class DiscoveryService {
         .catch(() => [])
     );
 
-    // Source B: Targeted fresh singles from user's top affinity artists
+    // Source B: Targeted fresh singles from user's top 3 affinity artists
     for (const artist of topArtists.slice(0, 3)) {
       queries.push(
         invoke<SearchPage>('search_music', { query: `${artist} Latest New Single Official 2026` })
@@ -123,8 +155,11 @@ export class DiscoveryService {
     // Fallback if candidate pool is too small (< 12)
     if (candidateMap.size < 12) {
       try {
-        const fallback = await invoke<SearchPage>('search_music', { query: 'Top New Releases Breakthrough Worldwide' });
+        const fallback = await invoke<SearchPage>('search_music', {
+          query: 'Top New Releases Breakthrough Worldwide 2026'
+        });
         if (fallback && fallback.songs) {
+          if (!continuationToken) continuationToken = fallback.continuation_token ?? null;
           for (const s of fallback.songs) {
             if (!playedIds.has(s.id) && !candidateMap.has(s.id)) {
               candidateMap.set(s.id, {
@@ -173,6 +208,81 @@ export class DiscoveryService {
       songs: finalSongs,
       continuationToken
     };
+  }
+
+  /**
+   * Infinite Loader for New to You discovery carousel:
+   * 1. Consumes continuation token if present.
+   * 2. When continuation token expires, rotates to the next fresh discovery stream
+   *    (favorite artists' latest singles, emerging genres, underground gems),
+   *    filtering strictly against songs the user has already played/liked/saved!
+   */
+  async fetchMoreNew(
+    currentToken: string | null,
+    existingSongIds: Set<string>
+  ): Promise<{ songs: Song[]; continuationToken: string | null }> {
+    const playedIds = this.getNoveltyBlocklist();
+    const newSongs: Song[] = [];
+    let nextToken: string | null = currentToken;
+
+    // Phase 1: Try current continuation token
+    if (nextToken) {
+      try {
+        const page: SearchPage = await invoke<SearchPage>('search_more', {
+          continuationToken: nextToken
+        });
+        if (page && page.songs && page.songs.length > 0) {
+          for (const s of page.songs) {
+            if (!playedIds.has(s.id) && !existingSongIds.has(s.id)) {
+              existingSongIds.add(s.id);
+              newSongs.push({ ...s, thumb: this.sanitizeThumb(s.thumb) });
+            }
+          }
+          nextToken = page.continuation_token ?? null;
+          if (newSongs.length >= 8) {
+            return { songs: newSongs, continuationToken: nextToken };
+          }
+        } else {
+          nextToken = null;
+        }
+      } catch (_) {
+        nextToken = null;
+      }
+    }
+
+    // Phase 2: Advance to next discovery query
+    let attempts = 0;
+    while (newSongs.length < 15 && attempts < 3) {
+      attempts++;
+      if (this.discoveryQueries.length === 0) {
+        this.discoveryQueries = [
+          'Indie Breakthrough New Music 2026',
+          'Fresh Alternative Pop Drops 2026',
+          'Emerging Underground R&B Soul 2026',
+          'New Electronic Dance Releases 2026',
+          'New Acoustic Folk Singer Songwriter 2026',
+          'Fresh Melodic Hip Hop Drops 2026'
+        ];
+      }
+
+      const query = this.discoveryQueries[this.queryIndex % this.discoveryQueries.length];
+      this.queryIndex++;
+
+      try {
+        const page: SearchPage = await invoke<SearchPage>('search_music', { query });
+        if (page && page.songs) {
+          nextToken = page.continuation_token ?? null;
+          for (const s of page.songs) {
+            if (!playedIds.has(s.id) && !existingSongIds.has(s.id)) {
+              existingSongIds.add(s.id);
+              newSongs.push({ ...s, thumb: this.sanitizeThumb(s.thumb) });
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    return { songs: newSongs, continuationToken: nextToken };
   }
 }
 

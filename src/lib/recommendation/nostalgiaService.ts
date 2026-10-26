@@ -10,6 +10,10 @@ interface ScoredOldie {
 }
 
 export class NostalgiaService {
+  private allPersonalCandidates: Song[] = [];
+  private classicsQueries: string[] = [];
+  private classicsQueryIndex = 0;
+
   private sanitizeThumb(url?: string): string {
     if (!url) return '';
     if (url.includes('/maxresdefault.jpg')) {
@@ -48,25 +52,22 @@ export class NostalgiaService {
       const isLiked = likedSet.has(song.id);
       const isSaved = savedSet.has(song.id);
 
-      // Only qualify if song was repeated (plays >= 2) OR explicitly liked OR downloaded offline
-      if (plays < 2 && !isLiked && !isSaved) return;
-
-      // 1. Heavy Rotation Factor (Play Count)
+      // Qualify if song was repeated (plays >= 2) OR explicitly liked OR downloaded offline
+      // Or even single-play history (will be scored lower, forming the deeper memory archive)
       let score = Math.min(120, plays * 12);
 
-      // 2. Explicit User Commitment
+      // Explicit User Commitment
       if (isLiked) score += 40;
       if (isSaved) score += 35;
 
-      // 3. Nostalgic Time Curve (The "Haven't heard this in a few days" dopamine kick)
+      // Nostalgic Time Curve (The "Haven't heard this in a few days" dopamine kick)
       const lastPlayed = historyMap.get(song.id)?.playedAt || 0;
       if (lastPlayed > 0) {
         const daysAgo = (Date.now() - lastPlayed) / (1000 * 60 * 60 * 24);
         if (daysAgo >= 2 && daysAgo <= 45) {
-          // Sweet spot for nostalgic replay value
           score += Math.min(35, daysAgo * 3);
         } else if (daysAgo < 0.1) {
-          // Just played within the last 2 hours: slight cooldown
+          // Just played within last 2 hours: slight cooldown
           score -= 15;
         }
       }
@@ -137,15 +138,115 @@ export class NostalgiaService {
       }
     }
 
-    // Sort by Nostalgia Score
+    // Prepare infinite throwback queries
+    const topArtists = tasteProfile.getTopArtists(5);
+    const classics: string[] = [];
+    for (const a of topArtists) {
+      classics.push(`${a} Greatest Hits Classics`);
+      classics.push(`${a} Essential Anthems`);
+    }
+    classics.push(
+      '2010s Nostalgia Pop Throwback Hits',
+      '2000s Classic Nostalgia Anthems',
+      '90s Greatest Classic Anthems',
+      'All Time Greatest Classic Hits Throwback'
+    );
+    this.classicsQueries = classics;
+    this.classicsQueryIndex = 0;
+
+    // Sort all personal candidates by Nostalgia Score
     const sorted = Array.from(candidateMap.values())
       .sort((a, b) => b.score - a.score)
       .map(entry => entry.song);
 
+    this.allPersonalCandidates = sorted;
+
     return {
-      songs: sorted.slice(0, 50),
+      songs: sorted.slice(0, 30),
       continuationToken: null
     };
+  }
+
+  /**
+   * Infinite Loader for "Your Old Ones":
+   * 1. First streams remaining personal favorites from user's full history & liked archive.
+   * 2. Once personal archive is fully rendered, seamlessly branches into favorite artists'
+   *    greatest classics & all-time nostalgic anthems!
+   */
+  async fetchMoreOld(
+    currentToken: string | null,
+    existingSongIds: Set<string>
+  ): Promise<{ songs: Song[]; continuationToken: string | null }> {
+    const newSongs: Song[] = [];
+    let nextToken: string | null = currentToken;
+
+    // Phase 1: Check if unrendered songs exist in personal candidate archive
+    for (const s of this.allPersonalCandidates) {
+      if (!existingSongIds.has(s.id)) {
+        existingSongIds.add(s.id);
+        newSongs.push(s);
+        if (newSongs.length >= 15) {
+          return { songs: newSongs, continuationToken: null };
+        }
+      }
+    }
+
+    // Phase 2: If we had a web continuation token, try that
+    if (nextToken) {
+      try {
+        const page: SearchPage = await invoke<SearchPage>('search_more', {
+          continuationToken: nextToken
+        });
+        if (page && page.songs && page.songs.length > 0) {
+          for (const s of page.songs) {
+            if (!existingSongIds.has(s.id)) {
+              existingSongIds.add(s.id);
+              newSongs.push({ ...s, thumb: this.sanitizeThumb(s.thumb) });
+            }
+          }
+          nextToken = page.continuation_token ?? null;
+          if (newSongs.length >= 8) {
+            return { songs: newSongs, continuationToken: nextToken };
+          }
+        } else {
+          nextToken = null;
+        }
+      } catch (_) {
+        nextToken = null;
+      }
+    }
+
+    // Phase 3: Query favorite artists classics and nostalgic decade hits
+    let attempts = 0;
+    while (newSongs.length < 15 && attempts < 3) {
+      attempts++;
+      if (this.classicsQueries.length === 0) {
+        this.classicsQueries = [
+          '2010s Nostalgia Pop Throwback Hits',
+          '2000s Classic Nostalgia Anthems',
+          '90s Greatest Classic Anthems',
+          'All Time Greatest Classic Hits Throwback'
+        ];
+      }
+
+      const query = this.classicsQueries[this.classicsQueryIndex % this.classicsQueries.length];
+      this.classicsQueryIndex++;
+
+      try {
+        const page: SearchPage = await invoke<SearchPage>('search_music', { query });
+        if (page && page.songs) {
+          nextToken = page.continuation_token ?? null;
+          for (const s of page.songs) {
+            if (!existingSongIds.has(s.id)) {
+              existingSongIds.add(s.id);
+              newSongs.push({ ...s, thumb: this.sanitizeThumb(s.thumb) });
+            }
+          }
+        }
+      } catch (_) {}
+    }
+
+    return { songs: newSongs, continuationToken: nextToken };
   }
 }
 

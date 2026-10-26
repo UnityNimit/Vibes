@@ -1,6 +1,5 @@
-import { invoke } from '@tauri-apps/api/core';
-import type { Song, SearchPage } from '../types';
-import type { TrendingMood, RegionCode, CircadianInfo, PersistentFeedData } from './types';
+import type { Song } from '../types';
+import type { TrendingMood, RegionCode, PersistentFeedData } from './types';
 import { getCircadianInfo } from './circadian';
 import { getStoredRegionPreference, saveStoredRegionPreference } from './location';
 import { tasteProfile } from './tasteProfile.svelte';
@@ -8,8 +7,6 @@ import { trendingService } from './trendingService';
 import { recommendedService } from './recommendedService';
 import { discoveryService } from './discoveryService';
 import { nostalgiaService } from './nostalgiaService';
-import { likedStore } from '../likedStore.svelte';
-import { savedStore } from '../savedStore.svelte';
 
 const FEED_STORAGE_KEY = 'vibes_persistent_feed_v3';
 
@@ -56,10 +53,10 @@ export class RecommendationEngine {
         this.trendingRegion = getStoredRegionPreference();
         this.hydrateFromStorage();
 
-        // If feed is empty or stale (> 3 hours), trigger background refresh
-        const isStale = Date.now() - this.lastUpdated > 3 * 60 * 60 * 1000;
+        // If feed is empty or stale (> 15 minutes), trigger background refresh
+        const isStale = Date.now() - this.lastUpdated > 15 * 60 * 1000;
         if (this.trendingSongs.length === 0 || this.recommendedSongs.length === 0 || isStale) {
-          setTimeout(() => this.refreshAllFeeds(), 150);
+          setTimeout(() => this.refreshAllFeeds(true), 200);
         }
       } catch (e) {
         console.error('[RecommendationEngine] Constructor init error:', e);
@@ -101,13 +98,13 @@ export class RecommendationEngine {
     if (typeof window === 'undefined') return;
     try {
       const data: PersistentFeedData = {
-        recommendedSongs: this.recommendedSongs.slice(0, 50),
+        recommendedSongs: this.recommendedSongs.slice(0, 60),
         recommendedToken: this.recommendedToken,
-        trendingSongs: this.trendingSongs.slice(0, 50),
+        trendingSongs: this.trendingSongs.slice(0, 60),
         trendingToken: this.trendingToken,
-        newSongs: this.newSongs.slice(0, 50),
+        newSongs: this.newSongs.slice(0, 60),
         newToken: this.newToken,
-        oldSongs: this.oldSongs.slice(0, 50),
+        oldSongs: this.oldSongs.slice(0, 60),
         oldToken: this.oldToken,
         recommendedSearches: this.recommendedSearches,
         lastUpdated: Date.now(),
@@ -144,9 +141,10 @@ export class RecommendationEngine {
         ? this.circadianInfo.queryKeyword as TrendingMood
         : this.trendingMood;
 
-      const songs = await trendingService.fetchTrending(effectiveMood, this.trendingRegion, force);
-      if (songs && songs.length > 0) {
-        this.trendingSongs = songs;
+      const res = await trendingService.fetchTrending(effectiveMood, this.trendingRegion, force);
+      if (res && res.songs && res.songs.length > 0) {
+        this.trendingSongs = res.songs;
+        this.trendingToken = res.continuationToken;
         this.persistFeed();
       }
     } catch (err) {
@@ -160,15 +158,22 @@ export class RecommendationEngine {
     if (this.isLoadingMoreTrending || this.isTrendingLoading) return;
     this.isLoadingMoreTrending = true;
     try {
-      if (this.trendingToken) {
-        const page: SearchPage = await invoke<SearchPage>('search_more', { continuationToken: this.trendingToken });
-        if (page && page.songs && page.songs.length > 0) {
-          const existing = new Set(this.trendingSongs.map(s => s.id));
-          const additions = page.songs.filter(s => !existing.has(s.id));
-          this.trendingSongs = [...this.trendingSongs, ...additions];
-          this.trendingToken = page.continuation_token ?? null;
-          this.persistFeed();
-        }
+      const effectiveMood = this.trendingMood === 'circadian'
+        ? this.circadianInfo.queryKeyword as TrendingMood
+        : this.trendingMood;
+
+      const existing = new Set(this.trendingSongs.map(s => s.id));
+      const res = await trendingService.fetchMoreTrending(
+        effectiveMood,
+        this.trendingRegion,
+        this.trendingToken,
+        existing
+      );
+
+      if (res && res.songs && res.songs.length > 0) {
+        this.trendingSongs = [...this.trendingSongs, ...res.songs];
+        this.trendingToken = res.continuationToken;
+        this.persistFeed();
       }
     } catch (err) {
       console.error('[RecommendationEngine] loadMoreTrending error:', err);
@@ -177,10 +182,10 @@ export class RecommendationEngine {
     }
   }
 
-  // --- RECOMMENDED FOR YOU (Super Addictive Multi-Seed & Collaborative Filtering) ---
+  // --- RECOMMENDED FOR YOU (Dynamic Multi-Seed & Continual Evolution Engine) ---
 
   async refreshRecommended(force = false) {
-    if (this.recommendedSongs.length > 0 && !force) return;
+    if (this.isRecommendedLoading) return;
     this.isRecommendedLoading = true;
     try {
       const { songs, continuationToken } = await recommendedService.generateRecommended(force);
@@ -197,31 +202,17 @@ export class RecommendationEngine {
   }
 
   async loadMoreRecommended() {
-    if (!this.recommendedToken || this.isLoadingMoreRecommended || this.isRecommendedLoading) return;
+    if (this.isLoadingMoreRecommended || this.isRecommendedLoading) return;
     this.isLoadingMoreRecommended = true;
     try {
       const existing = new Set(this.recommendedSongs.map(s => s.id));
-      let newBatch: Song[] = [];
-      let token: string | null = this.recommendedToken;
-      let depth = 0;
+      const res = await recommendedService.fetchNextBatch(existing, this.recommendedToken);
 
-      while (token && newBatch.length < 16 && depth < 3) {
-        depth++;
-        const page: SearchPage = await invoke<SearchPage>('get_more_similar_songs', { continuationToken: token });
-        token = page.continuation_token ?? null;
-        for (const s of page.songs) {
-          if (!existing.has(s.id)) {
-            existing.add(s.id);
-            newBatch.push({ ...s, thumb: this.sanitizeThumb(s.thumb) });
-          }
-        }
+      if (res && res.songs && res.songs.length > 0) {
+        this.recommendedSongs = [...this.recommendedSongs, ...res.songs];
+        this.recommendedToken = res.continuationToken;
+        this.persistFeed();
       }
-
-      if (newBatch.length > 0) {
-        this.recommendedSongs = [...this.recommendedSongs, ...newBatch];
-      }
-      this.recommendedToken = token;
-      this.persistFeed();
     } catch (e) {
       console.error('[RecommendationEngine] Error in loadMoreRecommended:', e);
     } finally {
@@ -229,10 +220,10 @@ export class RecommendationEngine {
     }
   }
 
-  // --- NEW TO YOU (Super Addictive Discovery Engine) ---
+  // --- NEW TO YOU (Super Addictive Infinite Discovery Engine) ---
 
   async refreshNewToYou(force = false) {
-    if (this.newSongs.length > 0 && !force) return;
+    if (this.isNewLoading) return;
     this.isNewLoading = true;
     try {
       const { songs, continuationToken } = await discoveryService.generateNewToYou(force);
@@ -249,31 +240,17 @@ export class RecommendationEngine {
   }
 
   async loadMoreNew() {
-    if (!this.newToken || this.isLoadingMoreNew || this.isNewLoading) return;
+    if (this.isLoadingMoreNew || this.isNewLoading) return;
     this.isLoadingMoreNew = true;
     try {
       const existing = new Set(this.newSongs.map(s => s.id));
-      let newBatch: Song[] = [];
-      let token: string | null = this.newToken;
-      let depth = 0;
+      const res = await discoveryService.fetchMoreNew(this.newToken, existing);
 
-      while (token && newBatch.length < 16 && depth < 3) {
-        depth++;
-        const page: SearchPage = await invoke<SearchPage>('search_more', { continuationToken: token });
-        token = page.continuation_token ?? null;
-        for (const s of page.songs) {
-          if (!existing.has(s.id)) {
-            existing.add(s.id);
-            newBatch.push({ ...s, thumb: this.sanitizeThumb(s.thumb) });
-          }
-        }
+      if (res && res.songs && res.songs.length > 0) {
+        this.newSongs = [...this.newSongs, ...res.songs];
+        this.newToken = res.continuationToken;
+        this.persistFeed();
       }
-
-      if (newBatch.length > 0) {
-        this.newSongs = [...this.newSongs, ...newBatch];
-      }
-      this.newToken = token;
-      this.persistFeed();
     } catch (e) {
       console.error('[RecommendationEngine] Error in loadMoreNew:', e);
     } finally {
@@ -281,10 +258,10 @@ export class RecommendationEngine {
     }
   }
 
-  // --- YOUR OLD ONES (Super Addictive Repeat Favorites & Nostalgia Engine) ---
+  // --- YOUR OLD ONES (Super Addictive Infinite Repeat Favorites & Nostalgia Engine) ---
 
   async refreshOldOnes(force = false) {
-    if (this.oldSongs.length > 0 && !force) return;
+    if (this.isOldLoading) return;
     this.isOldLoading = true;
     try {
       const { songs, continuationToken } = await nostalgiaService.generateOldOnes(force);
@@ -301,31 +278,17 @@ export class RecommendationEngine {
   }
 
   async loadMoreOld() {
-    if (!this.oldToken || this.isLoadingMoreOld || this.isOldLoading) return;
+    if (this.isLoadingMoreOld || this.isOldLoading) return;
     this.isLoadingMoreOld = true;
     try {
       const existing = new Set(this.oldSongs.map(s => s.id));
-      let newBatch: Song[] = [];
-      let token: string | null = this.oldToken;
-      let depth = 0;
+      const res = await nostalgiaService.fetchMoreOld(this.oldToken, existing);
 
-      while (token && newBatch.length < 16 && depth < 3) {
-        depth++;
-        const page: SearchPage = await invoke<SearchPage>('search_more', { continuationToken: token });
-        token = page.continuation_token ?? null;
-        for (const s of page.songs) {
-          if (!existing.has(s.id)) {
-            existing.add(s.id);
-            newBatch.push({ ...s, thumb: this.sanitizeThumb(s.thumb) });
-          }
-        }
+      if (res && res.songs && res.songs.length > 0) {
+        this.oldSongs = [...this.oldSongs, ...res.songs];
+        this.oldToken = res.continuationToken;
+        this.persistFeed();
       }
-
-      if (newBatch.length > 0) {
-        this.oldSongs = [...this.oldSongs, ...newBatch];
-      }
-      this.oldToken = token;
-      this.persistFeed();
     } catch (e) {
       console.error('[RecommendationEngine] Error in loadMoreOld:', e);
     } finally {
@@ -430,19 +393,21 @@ export class RecommendationEngine {
     if (this.debounceTimer) clearTimeout(this.debounceTimer);
     this.debounceTimer = setTimeout(() => {
       this.updateRecommendedSearches();
+      // Dynamically evolve Recommended & Old Ones when user listens to music!
+      this.refreshRecommended(true);
       this.refreshOldOnes(true);
-    }, 6000);
+    }, 4500);
   }
 
-  async refreshAllFeeds() {
+  async refreshAllFeeds(force = true) {
     if (this.isRefreshingAll) return;
     this.isRefreshingAll = true;
     try {
       await Promise.allSettled([
-        this.refreshTrending(true),
-        this.refreshRecommended(),
-        this.refreshNewToYou(),
-        this.refreshOldOnes(),
+        this.refreshTrending(force),
+        this.refreshRecommended(force),
+        this.refreshNewToYou(force),
+        this.refreshOldOnes(force),
         this.updateRecommendedSearches()
       ]);
       this.persistFeed();

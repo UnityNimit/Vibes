@@ -448,7 +448,7 @@
           title={player.repeatMode === 'one' ? 'Repeat One (Click for Shuffle)' : player.repeatMode === 'shuffle' ? 'Shuffle (Click for Off)' : 'Sequential (Click for Repeat One)'}
           aria-label="Toggle repeat or shuffle mode"
         >
-          <RepeatIcon mode={player.repeatMode} size={20} />
+          <RepeatIcon mode={player.repeatMode} size={30} />
         </button>
       </div>
 

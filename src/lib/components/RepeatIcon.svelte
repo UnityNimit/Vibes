@@ -9,7 +9,7 @@
     size?: number | string;
   }
 
-  let { mode = 'off', class: className = '', size = 20 }: Props = $props();
+  let { mode = 'off', class: className = '', size = 30 }: Props = $props();
 
   type ShapeKind = 'line' | 'circle' | 'infinity';
 

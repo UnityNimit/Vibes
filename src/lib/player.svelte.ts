@@ -63,6 +63,8 @@ class PlayerState {
   // Ultra-fast in-memory stream cache & lookahead pre-fetcher
   private streamCache = new Map<string, { result: StreamResult; timestamp: number }>();
   private autoCachedCurrent = false;
+  private listenedSeconds = 0;
+  private lastTimeUpdate = 0;
   private currentBlobUrl: string | null = null;
 
   constructor() {
@@ -94,9 +96,10 @@ class PlayerState {
       this.initMediaBridge();
       try {
         if ((window as any).__TAURI_INTERNALS__) {
-          listen<string>('cache-updated', (event) => {
-            if (this.currentSong && event.payload === this.currentSong.id) {
-              this.isCached = true;
+          listen<string>('cache-updated', async () => {
+            await savedStore.refresh();
+            if (this.currentSong) {
+              this.isCached = savedStore.isSaved(this.currentSong.id);
             }
           }).catch(() => {});
         }
@@ -112,11 +115,29 @@ class PlayerState {
 
     this.audio.addEventListener('timeupdate', () => {
       if (this.audio) {
-        this.currentTime = this.audio.currentTime;
+        const now = this.audio.currentTime;
+        const dt = now - this.lastTimeUpdate;
+        this.lastTimeUpdate = now;
+
+        // If audio was progressing forward normally, accumulate listened time
+        if (dt > 0 && dt < 2.5 && !this.audio.paused) {
+          this.listenedSeconds += dt;
+        }
+
+        this.currentTime = now;
         this.updateActiveLyric();
 
-        // 1. Delayed auto-cache: only starts after 15s of uninterrupted listening
-        if (!this.autoCachedCurrent && this.currentTime >= 15 && settings.autoSave && !this.isCached && this.currentSong) {
+        // 1. Automatic download only happens when the complete song has been listened to
+        // (listened to >= 85% of total song duration AND arrived at the very end of the track)
+        if (
+          !this.autoCachedCurrent &&
+          settings.autoSave &&
+          !this.isCached &&
+          this.currentSong &&
+          this.duration > 5 &&
+          this.listenedSeconds >= this.duration * 0.85 &&
+          this.currentTime >= this.duration - 1.5
+        ) {
           this.autoCachedCurrent = true;
           invoke('trigger_auto_cache', { song: this.currentSong }).catch(() => {});
         }
@@ -171,7 +192,27 @@ class PlayerState {
       const audioErr = this.audio?.error;
       console.error('[Audio Error]', e, 'Code:', audioErr?.code, 'Message:', audioErr?.message);
 
-      // Automatic self-healing: if cached or blob playback fails on Windows/WebView, immediately resolve and play live stream
+      // 1. If local asset playback fails, try loading direct bytes into a Blob URL
+      if (this.currentSong && this.isCached && !this.currentBlobUrl) {
+        try {
+          const bytes = await invoke<number[]>('get_cached_audio_bytes', { videoId: this.currentSong.id });
+          if (bytes && bytes.length > 0) {
+            const blob = new Blob([new Uint8Array(bytes)], { type: 'audio/mp4' });
+            this.currentBlobUrl = URL.createObjectURL(blob);
+            if (this.audio) {
+              this.audio.src = this.currentBlobUrl;
+              await this.audio.play();
+              this.isPlaying = true;
+              this.isLoading = false;
+              return;
+            }
+          }
+        } catch (blobErr) {
+          console.warn('[Cache Blob Recovery Failed]', blobErr);
+        }
+      }
+
+      // 2. Automatic self-healing: if cached or blob playback fails on Windows/WebView, immediately resolve and play live stream
       if (this.currentSong && (this.isCached || this.currentBlobUrl)) {
         console.warn('[Audio Recovery] Cached audio playback failed. Seamlessly fetching online stream...');
         this.isCached = false;
@@ -491,6 +532,8 @@ class PlayerState {
     this.syncMediaNotification('metadata');
     this.isLoading = true;
     this.autoCachedCurrent = false;
+    this.listenedSeconds = 0;
+    this.lastTimeUpdate = 0;
     this.currentTime = syncStartPosition && syncStartPosition > 0 ? syncStartPosition : 0;
     this.duration = 0;
     this.activeLyricIndex = -1;
@@ -539,29 +582,14 @@ class PlayerState {
       this.isCached = streamRes.is_cached;
 
       if (streamRes.is_cached) {
-        let loadedBlob = false;
-        try {
-          // 1. High-speed direct byte loading into a Blob URL (100% immune to asset protocol restrictions)
-          const bytes = await invoke<number[]>('get_cached_audio_bytes', { videoId: safeSong.id });
-          if (bytes && bytes.length > 0) {
-            const blob = new Blob([new Uint8Array(bytes)], { type: 'audio/mp4' });
-            if (this.currentBlobUrl) {
-              URL.revokeObjectURL(this.currentBlobUrl);
-            }
-            this.currentBlobUrl = URL.createObjectURL(blob);
-            this.audio.src = this.currentBlobUrl;
-            loadedBlob = true;
-          }
-        } catch (e) {
-          console.warn('[Cache Load] Direct byte load failed, falling back:', e);
+        if (this.currentBlobUrl) {
+          URL.revokeObjectURL(this.currentBlobUrl);
+          this.currentBlobUrl = null;
         }
-
-        if (!loadedBlob) {
-          if (streamRes.local_path) {
-            this.audio.src = convertFileSrc(streamRes.local_path);
-          } else {
-            this.audio.src = streamRes.url;
-          }
+        if (streamRes.local_path) {
+          this.audio.src = convertFileSrc(streamRes.local_path);
+        } else {
+          this.audio.src = streamRes.url;
         }
       } else {
         if (this.currentBlobUrl) {
@@ -817,6 +845,18 @@ class PlayerState {
   }
 
   private handleSongEnd() {
+    // Automatic download only happens when the complete song has been listened to
+    if (
+      !this.autoCachedCurrent &&
+      settings.autoSave &&
+      !this.isCached &&
+      this.currentSong &&
+      (this.duration <= 5 || this.listenedSeconds >= Math.min(this.duration * 0.8, Math.max(10, this.duration - 4)))
+    ) {
+      this.autoCachedCurrent = true;
+      invoke('trigger_auto_cache', { song: this.currentSong }).catch(() => {});
+    }
+
     if (this.jamDelegate?.isGuest()) {
       // Guest lets Host orchestrate track progression
       return;

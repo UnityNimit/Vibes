@@ -210,7 +210,7 @@
                 title="Shuffle playlist"
                 aria-label="Shuffle playlist"
               >
-                <svg class="w-4 h-4 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="w-6 h-6 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/>
                   <path d="m18 2 4 4-4 4"/>
                   <path d="M2 6h1.4c1.3 0 2.5.6 3.3 1.7l2.8 4"/>

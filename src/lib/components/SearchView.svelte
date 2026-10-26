@@ -52,8 +52,8 @@
 
   onMount(() => {
     isMobileView = isMobile();
-    if (feedStore.recommendedSongs.length === 0) {
-      feedStore.refreshAllFeeds();
+    if (feedStore.recommendedSongs.length === 0 || Date.now() - feedStore.lastUpdated > 10 * 60 * 1000) {
+      feedStore.refreshAllFeeds(true);
     }
     if (scrollContainerEl && searchStore.scrollTop > 0) {
       requestAnimationFrame(() => {
@@ -88,6 +88,17 @@
     if (!el) return;
     const scrollAmount = Math.max(380, el.clientWidth * 0.7);
     el.scrollBy({ left: direction * scrollAmount, behavior: 'smooth' });
+
+    if (direction > 0) {
+      setTimeout(() => {
+        if (el && el.scrollWidth - el.scrollLeft - el.clientWidth <= 1200) {
+          if (section === 'recommended') feedStore.loadMoreRecommended();
+          else if (section === 'trending') feedStore.loadMoreTrending();
+          else if (section === 'new') feedStore.loadMoreNew();
+          else if (section === 'old') feedStore.loadMoreOld();
+        }
+      }, 350);
+    }
   }
 
   // Flawless Wheel Handling:

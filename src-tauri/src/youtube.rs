@@ -559,7 +559,7 @@ async fn get_or_refresh_visitor_session(client: &reqwest::Client, force_refresh:
     Ok((visitor_id, cookies_str))
 }
 
-async fn resolve_stream_url_innertube(video_id: &str) -> Result<String, String> {
+pub async fn resolve_stream_url_innertube(video_id: &str) -> Result<String, String> {
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(8))
         .build()
