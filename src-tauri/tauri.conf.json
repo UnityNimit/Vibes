@@ -30,15 +30,10 @@
         "scope": [
           "**",
           "$APPDATA/**",
-          "$APPDATA/Vibes/**",
-          "$APPDATA/Vibes/cache/**",
-          "$LOCALAPPDATA/**",
+          "$APPLOCALDATA/**",
+          "$CACHE/**",
           "$AUDIO/**",
-          "C:/**",
-          "C:\\**",
-          "D:/**",
-          "D:\\**",
-          "*"
+          "$DOWNLOAD/**"
         ]
       }
     }

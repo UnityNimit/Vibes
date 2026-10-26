@@ -19,3 +19,5 @@ keystore.properties
 /.tauri
 /tauri.settings.gradle
 *.zip
+.kotlin/
+
