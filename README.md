@@ -8,14 +8,13 @@ A blazing-fast, lightweight, ad-free music player inspired by **ViMusic**, built
 
 | Platform | Download Link | Alternative | Notes |
 | :--- | :--- | :--- | :--- |
-| **Android** | [Vibes.apk](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.apk) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.apk) | Universal APK (arm64-v8a, armeabi-v7a, x86_64, x86), 16 KB page-aligned, Release signed |
-| **Windows Installer** | [Vibes_1.0.0_x64-setup.exe](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes_1.0.0_x64-setup.exe) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes_1.0.0_x64-setup.exe) | Setup installer for 64-bit Windows |
-| **Windows MSI** | [Vibes_1.0.0_x64_en-US.msi](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes_1.0.0_x64_en-US.msi) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes_1.0.0_x64_en-US.msi) | Windows MSI Package |
-| **Windows Portable** | [Vibes.exe](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.exe) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.exe) | Standalone portable executable |
-| **macOS Universal** | [Vibes.dmg](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.dmg) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.dmg) | Apple Silicon (M1/M2/M3/M4) & Intel x86_64 |
-| **Linux AppImage** | [Vibes.AppImage](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.AppImage) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.AppImage) | Universal Linux package |
-| **Linux Debian / Ubuntu** | [Vibes.deb](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.deb) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.deb) | .deb Package |
-| **iOS** | [Vibes.ipa](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.ipa) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.ipa) | Sideloadable via AltStore / Sideloadly / TrollStore |
+| **Android** | [Vibes.apk (29.7 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.apk) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.apk) | Universal Multi-Arch APK (`arm64`, `armv7`, `x86_64`, `x86`), 16 KB page-aligned, Release signed |
+| **Windows Portable** | [Vibes.exe (6.3 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.exe) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.exe) | Standalone portable executable |
+| **Windows Installer** | [Vibes_1.0.0_x64-setup.exe (2.3 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes_1.0.0_x64-setup.exe) | [MSI Package (3.1 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes_1.0.0_x64_en-US.msi) | Setup installer / enterprise MSI |
+| **macOS Universal** | [Vibes.dmg (5.9 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.dmg) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.dmg) | Apple Silicon (M1/M2/M3/M4) & Intel x86_64 |
+| **Linux AppImage** | [Vibes.AppImage (78.4 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.AppImage) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.AppImage) | Universal Linux package |
+| **Linux Debian / Ubuntu** | [Vibes.deb (3.5 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.deb) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.deb) | .deb Package |
+| **iOS** | [Vibes.ipa (2.5 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.ipa) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.ipa) | Sideloadable via AltStore / Sideloadly / TrollStore |
 
 ---
 
