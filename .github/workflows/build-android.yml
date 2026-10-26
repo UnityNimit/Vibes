@@ -85,7 +85,11 @@ jobs:
 
             if ! $APKSIGNER verify "$RAW_APK" 2>/dev/null; then
               echo "Signing APK with release.keystore..."
-              $ZIPALIGN -P 16 -f 4 "$RAW_APK" android_dist/Vibes.apk
+              if $ZIPALIGN -h 2>&1 | grep -q -- "-P"; then
+                $ZIPALIGN -P 16 -f 4 "$RAW_APK" android_dist/Vibes.apk
+              else
+                $ZIPALIGN -p -f 4 "$RAW_APK" android_dist/Vibes.apk
+              fi
               $APKSIGNER sign --ks src-tauri/gen/android/app/release.keystore --ks-key-alias vibes --ks-pass pass:vibespassword --key-pass pass:vibespassword --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true android_dist/Vibes.apk
             else
               echo "APK is already signed by Gradle, copying to distribution..."
