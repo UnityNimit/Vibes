@@ -2,6 +2,7 @@ package com.vibes.music
 
 import android.content.Context
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -33,7 +34,7 @@ class MainActivity : TauriActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        hideNotificationBar()
+        setupPermanentStatusBar()
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -94,34 +95,40 @@ class MainActivity : TauriActivity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
-            hideNotificationBar()
+            setupPermanentStatusBar()
         }
     }
 
-    private fun hideNotificationBar() {
+    private fun setupPermanentStatusBar() {
         try {
             window.decorView.post {
                 try {
-                    WindowCompat.setDecorFitsSystemWindows(window, false)
-                    val controller = WindowCompat.getInsetsController(window, window.decorView)
-                    controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-                    controller?.hide(WindowInsetsCompat.Type.statusBars())
+                    // Ensure window content is positioned immediately below the notification bar
+                    WindowCompat.setDecorFitsSystemWindows(window, true)
 
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                        window.attributes.layoutInDisplayCutoutMode =
-                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
-                    }
+                    // Permanently show the notification / status bar
+                    val controller = WindowCompat.getInsetsController(window, window.decorView)
+                    controller?.show(WindowInsetsCompat.Type.statusBars())
+
+                    // Clear fullscreen flag if present
                     @Suppress("DEPRECATION")
-                    window.setFlags(
-                        WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                        WindowManager.LayoutParams.FLAG_FULLSCREEN
-                    )
+                    window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+
+                    // Solid black notification bar matching the app theme
+                    window.statusBarColor = Color.BLACK
+
+                    // Light (white) text and icons on the dark notification bar
+                    controller?.isAppearanceLightStatusBars = false
+
+                    // Solid black navigation bar matching the app theme
+                    window.navigationBarColor = Color.BLACK
+                    controller?.isAppearanceLightNavigationBars = false
                 } catch (t: Throwable) {
-                    android.util.Log.w("MainActivity", "hideNotificationBar post error", t)
+                    android.util.Log.w("MainActivity", "setupPermanentStatusBar post error", t)
                 }
             }
         } catch (t: Throwable) {
-            android.util.Log.w("MainActivity", "hideNotificationBar error", t)
+            android.util.Log.w("MainActivity", "setupPermanentStatusBar error", t)
         }
     }
 
