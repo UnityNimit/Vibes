@@ -64,12 +64,15 @@ jobs:
       - name: Build Android Universal APK via Tauri CLI
         run: |
           chmod +x src-tauri/gen/android/gradlew
-          npx tauri android build --apk --target aarch64 armv7 x86_64 --ci
+          npx tauri android build --apk --target aarch64 armv7 i686 x86_64 --ci
 
       - name: Prepare Deliverables
         run: |
           mkdir -p android_dist
-          RAW_APK=$(find src-tauri/gen/android -name "*universal*.apk" | head -n 1)
+          RAW_APK=$(find src-tauri/gen/android -name "*universal*release*.apk" | head -n 1)
+          if [ -z "$RAW_APK" ]; then
+            RAW_APK=$(find src-tauri/gen/android -name "*release*.apk" | head -n 1)
+          fi
           if [ -z "$RAW_APK" ]; then
             RAW_APK=$(find src-tauri/gen/android -name "*.apk" | head -n 1)
           fi
@@ -80,14 +83,15 @@ jobs:
             ZIPALIGN="$ANDROID_SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION/zipalign"
             APKSIGNER="$ANDROID_SDK_ROOT/build-tools/$BUILD_TOOLS_VERSION/apksigner"
 
-            # Create signing key
-            keytool -genkeypair -v -keystore release.keystore -alias vibes -keyalg RSA -keysize 2048 -validity 10000 -storepass vibes123 -keypass vibes123 -dname "CN=Vibes, OU=Vibes, O=Vibes, L=San Francisco, S=CA, C=US"
-            
-            # Align first (4-byte page aligned for Android 11+)
-            $ZIPALIGN -f -p 4 "$RAW_APK" android_dist/Vibes.apk
+            if ! $APKSIGNER verify "$RAW_APK" 2>/dev/null; then
+              echo "Signing APK with release.keystore..."
+              $ZIPALIGN -P 16 -f 4 "$RAW_APK" android_dist/Vibes.apk
+              $APKSIGNER sign --ks src-tauri/gen/android/app/release.keystore --ks-key-alias vibes --ks-pass pass:vibespassword --key-pass pass:vibespassword --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true android_dist/Vibes.apk
+            else
+              echo "APK is already signed by Gradle, copying to distribution..."
+              cp "$RAW_APK" android_dist/Vibes.apk
+            fi
 
-            # Sign second with apksigner (v1 + v2 + v3 full compatibility)
-            $APKSIGNER sign --ks release.keystore --ks-key-alias vibes --ks-pass pass:vibes123 --key-pass pass:vibes123 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true android_dist/Vibes.apk
             $APKSIGNER verify --verbose android_dist/Vibes.apk
             ls -lh android_dist/Vibes.apk
           fi

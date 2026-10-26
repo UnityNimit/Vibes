@@ -25,9 +25,18 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
-    packaging {
-        jniLibs {
-            useLegacyPackaging = true
+    signingConfigs {
+        create("release") {
+            val keyFile = file("release.keystore")
+            if (keyFile.exists()) {
+                storeFile = keyFile
+                storePassword = "vibespassword"
+                keyAlias = "vibes"
+                keyPassword = "vibespassword"
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
+            }
         }
     }
     buildTypes {
@@ -44,7 +53,12 @@ android {
             }
         }
         getByName("release") {
+            manifestPlaceholders["usesCleartextTraffic"] = "true"
             isMinifyEnabled = false
+            val keyFile = file("release.keystore")
+            if (keyFile.exists()) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 *fileTree(".") {
                   include("**/*.pro")

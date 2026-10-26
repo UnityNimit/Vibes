@@ -7,14 +7,13 @@ import android.os.Bundle
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.core.app.ActivityCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import java.lang.ref.WeakReference
 
 class MainActivity : TauriActivity() {
-
-    override val handleBackNavigation: Boolean = false
 
     companion object {
         private var activeWebView: WeakReference<WebView>? = null
@@ -34,16 +33,16 @@ class MainActivity : TauriActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        try {
-            hideNotificationBar()
-        } catch (t: Throwable) {
-            android.util.Log.w("MainActivity", "hideNotificationBar error", t)
-        }
+        hideNotificationBar()
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                 if (checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                    requestPermissions(arrayOf(android.Manifest.permission.POST_NOTIFICATIONS), 1001)
+                    ActivityCompat.requestPermissions(
+                        this,
+                        arrayOf(android.Manifest.permission.POST_NOTIFICATIONS),
+                        1001
+                    )
                 }
             }
         } catch (t: Throwable) {
@@ -101,20 +100,26 @@ class MainActivity : TauriActivity() {
 
     private fun hideNotificationBar() {
         try {
-            WindowCompat.setDecorFitsSystemWindows(window, false)
-            val controller = WindowCompat.getInsetsController(window, window.decorView)
-            controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            controller?.hide(WindowInsetsCompat.Type.statusBars())
+            window.decorView.post {
+                try {
+                    WindowCompat.setDecorFitsSystemWindows(window, false)
+                    val controller = WindowCompat.getInsetsController(window, window.decorView)
+                    controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    controller?.hide(WindowInsetsCompat.Type.statusBars())
 
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                window.attributes.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        window.attributes.layoutInDisplayCutoutMode =
+                            WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                    }
+                    @Suppress("DEPRECATION")
+                    window.setFlags(
+                        WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                        WindowManager.LayoutParams.FLAG_FULLSCREEN
+                    )
+                } catch (t: Throwable) {
+                    android.util.Log.w("MainActivity", "hideNotificationBar post error", t)
+                }
             }
-            @Suppress("DEPRECATION")
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN
-            )
         } catch (t: Throwable) {
             android.util.Log.w("MainActivity", "hideNotificationBar error", t)
         }
