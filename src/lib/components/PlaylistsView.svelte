@@ -5,6 +5,7 @@
   import { player } from '../player.svelte';
   import { savedStore } from '../savedStore.svelte';
   import { formatSongSize } from '../utils';
+  import { songContextMenu } from '../songContextMenuStore.svelte';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import BackIcon from './BackIcon.svelte';
@@ -245,6 +246,7 @@
               <div
                 role="button"
                 tabindex="0"
+                use:songContextMenu={song}
                 onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, i)}
                 onkeydown={(e) => { if (e.key === 'Enter' && selectedPlaylist) playPlaylist(selectedPlaylist, i); }}
                 class="flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === song.id ? 'bg-accent/15' : ''}"
@@ -293,6 +295,7 @@
               <div
                 role="button"
                 tabindex="0"
+                use:songContextMenu={song}
                 onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, i)}
                 onkeydown={(e) => { if (e.key === 'Enter' && selectedPlaylist) playPlaylist(selectedPlaylist, i); }}
                 class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"

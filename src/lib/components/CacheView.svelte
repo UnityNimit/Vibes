@@ -6,6 +6,7 @@
   import { player } from '../player.svelte';
   import { savedStore } from '../savedStore.svelte';
   import { formatBytes } from '../utils';
+  import { songContextMenu } from '../songContextMenuStore.svelte';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import type { CacheItem, CacheStats, Song } from '../types';
@@ -53,6 +54,17 @@
     } catch (err) {
       console.error(err);
     }
+  }
+
+  function toSong(item: CacheItem): Song {
+    return {
+      id: item.id,
+      title: item.title,
+      artist: item.artist,
+      album: item.album,
+      duration: item.duration,
+      thumb: item.thumb
+    };
   }
 
   function playCacheSong(item: CacheItem, index: number) {
@@ -110,6 +122,7 @@
           <div
             role="button"
             tabindex="0"
+            use:songContextMenu={toSong(item)}
             onclick={() => playCacheSong(item, i)}
             onkeydown={(e) => { if (e.key === 'Enter') playCacheSong(item, i); }}
             class="flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === item.id ? 'bg-accent/15' : ''}"
@@ -155,6 +168,7 @@
           <div
             role="button"
             tabindex="0"
+            use:songContextMenu={toSong(item)}
             onclick={() => playCacheSong(item, i)}
             onkeydown={(e) => { if (e.key === 'Enter') playCacheSong(item, i); }}
             class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === item.id ? 'bg-accent/10' : ''}"

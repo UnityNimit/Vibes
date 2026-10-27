@@ -7,6 +7,7 @@
   import { likedStore } from '../likedStore.svelte';
   import { savedStore } from '../savedStore.svelte';
   import { formatTime } from '../utils';
+  import { songContextMenu } from '../songContextMenuStore.svelte';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import RepeatIcon from './RepeatIcon.svelte';
@@ -687,6 +688,7 @@
                 role="button"
                 tabindex="0"
                 data-song-id={song.id}
+                use:songContextMenu={song}
                 onclick={() => playRightColumnSong(song, i)}
                 onkeydown={(e) => { if (e.key === 'Enter') playRightColumnSong(song, i); }}
                 class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group {isPlayingThis ? 'bg-accent/15' : 'active:bg-white/10'}"
@@ -996,6 +998,7 @@
                 role="button"
                 tabindex="0"
                 data-song-id={song.id}
+                use:songContextMenu={song}
                 onpointerenter={() => player.prefetchStream(song)}
                 onclick={() => playRightColumnSong(song, i)}
                 onkeydown={(e) => { if (e.key === 'Enter') playRightColumnSong(song, i); }}

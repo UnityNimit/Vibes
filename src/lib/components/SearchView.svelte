@@ -7,6 +7,7 @@
   import { feedStore } from '../feedStore.svelte';
   import { searchStore } from '../searchStore.svelte';
   import { cleanArtistName, formatSongSize } from '../utils';
+  import { songContextMenu } from '../songContextMenuStore.svelte';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import type { SearchPage, Song } from '../types';
@@ -227,6 +228,7 @@
   <div
     role="button"
     tabindex="0"
+    use:songContextMenu={song}
     onpointerenter={() => player.prefetchStream(song)}
     onclick={() => handleCardClick(song, sectionTitle, songList, index)}
     onkeydown={(e) => { if (e.key === 'Enter') handleCardClick(song, sectionTitle, songList, index); }}
@@ -386,6 +388,7 @@
           <div
             role="button"
             tabindex="0"
+            use:songContextMenu={song}
             onpointerenter={() => player.prefetchStream(song)}
             onclick={() => player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i)}
             onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i); }}
@@ -422,6 +425,7 @@
           <div
             role="button"
             tabindex="0"
+            use:songContextMenu={song}
             onpointerenter={() => player.prefetchStream(song)}
             onclick={() => player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i)}
             onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i); }}

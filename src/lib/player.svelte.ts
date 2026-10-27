@@ -782,6 +782,31 @@ class PlayerState {
     }
   }
 
+  playNext(song: Song) {
+    if (this.jamDelegate?.isGuest()) {
+      if (this.jamDelegate.onUserAddQueue?.(song)) return;
+    }
+    if (!this.currentSong || this.queue.length === 0) {
+      this.play(song);
+      return;
+    }
+    const existingIdx = this.queue.findIndex((s) => s.id === song.id);
+    if (existingIdx !== -1 && existingIdx > this.queueIndex) {
+      this.queue.splice(existingIdx, 1);
+    }
+    const insertIdx = this.queueIndex + 1;
+    this.queue.splice(insertIdx, 0, song);
+    if (this.currentContext.songs) {
+      const ctxIdx = this.currentContext.songs.findIndex((s) => s.id === song.id);
+      if (ctxIdx !== -1 && ctxIdx > this.queueIndex) {
+        this.currentContext.songs.splice(ctxIdx, 1);
+      }
+      this.currentContext.songs.splice(insertIdx, 0, song);
+    }
+    this.jamDelegate?.onHostQueueChanged?.(this.queue, this.queueIndex);
+    this.prefetchStream(song);
+  }
+
   setQueueFromSync(newQueue: Song[], newIndex: number) {
     this.queue = newQueue;
     this.queueIndex = newIndex;

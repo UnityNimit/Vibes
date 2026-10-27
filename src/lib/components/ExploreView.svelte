@@ -1,6 +1,7 @@
 <script lang="ts">
   import { invoke } from '@tauri-apps/api/core';
   import { player } from '../player.svelte';
+  import { songContextMenu } from '../songContextMenuStore.svelte';
   import TrackImage from './TrackImage.svelte';
   import type { SearchPage, Song } from '../types';
 
@@ -113,6 +114,7 @@
         <div
           role="button"
           tabindex="0"
+          use:songContextMenu={song}
           onpointerenter={() => player.prefetchStream(song)}
           onclick={() => player.play(song, { type: 'search', title: `Explore: ${activeCategory}`, songs: trendingSongs }, i)}
           onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: `Explore: ${activeCategory}`, songs: trendingSongs }, i); }}

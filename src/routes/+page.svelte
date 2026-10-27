@@ -11,6 +11,7 @@
   import PlaylistsView from '$lib/components/PlaylistsView.svelte';
   import JamView from '$lib/components/JamView.svelte';
   import BottomPlayer from '$lib/components/BottomPlayer.svelte';
+  import SongContextMenuModal from '$lib/components/SongContextMenuModal.svelte';
   import { player } from '$lib/player.svelte';
 
   type Tab = 'search' | 'liked' | 'saved' | 'playlists' | 'jam' | 'settings' | 'now_playing';
@@ -135,4 +136,7 @@
       <NowPlayingView onClose={toggleNowPlaying} />
     </div>
   {/if}
+
+  <!-- Global Song Context Menu & Playlist Selector (Desktop Right-Click & Mobile Long-Press) -->
+  <SongContextMenuModal />
 </div>
