@@ -1,7 +1,7 @@
 import { invoke, convertFileSrc } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import type { Song, StreamResult, LyricLine, PlaybackContext, PlaybackSourceType, SearchPage } from './types';
-import { parseDurationToSeconds } from './utils';
+import { parseDurationToSeconds, cleanArtistName, getHighQualityThumbCandidates } from './utils';
 import { settings } from './settings.svelte';
 import { savedStore } from './savedStore.svelte';
 import { likedStore } from './likedStore.svelte';
@@ -1012,16 +1012,36 @@ class PlayerState {
       durationSec = parseDurationToSeconds(this.currentSong.duration);
     }
 
+    const cleanTitle = (() => {
+      if (!this.currentSong) return 'Vibes';
+      const t = (this.currentSong.title || '').trim();
+      if (t.includes(' - ')) {
+        const parts = t.split(' - ');
+        if (parts.length === 2 && parts[1].trim()) return parts[1].trim();
+      }
+      return t || 'Vibes';
+    })();
+
+    const cleanArtist = this.currentSong
+      ? cleanArtistName(this.currentSong.artist, this.currentSong.title, this.currentSong.album) || 'Playing music'
+      : '';
+
+    const candidates = this.currentSong
+      ? getHighQualityThumbCandidates(this.currentSong.thumb, this.currentSong.id, true)
+      : [];
+    const thumbUrl = (candidates && candidates.length > 0 ? candidates[0] : this.currentSong?.thumb) || '';
+
     // 1. Sync standard navigator.mediaSession
     if ('mediaSession' in navigator && this.currentSong) {
       try {
         if (type === 'metadata') {
           navigator.mediaSession.metadata = new MediaMetadata({
-            title: this.currentSong.title,
-            artist: this.currentSong.artist,
-            artwork: this.currentSong.thumb
-              ? [{ src: this.currentSong.thumb, sizes: '512x512', type: 'image/jpeg' }]
-              : []
+            title: cleanTitle,
+            artist: cleanArtist,
+            album: this.currentSong.album || cleanArtist || 'Vibes',
+            artwork: candidates.length > 0
+              ? candidates.map((src) => ({ src, sizes: '512x512', type: 'image/jpeg' }))
+              : (thumbUrl ? [{ src: thumbUrl, sizes: '512x512', type: 'image/jpeg' }] : [])
           });
         }
         navigator.mediaSession.playbackState = this.isPlaying ? 'playing' : 'paused';
@@ -1034,9 +1054,9 @@ class PlayerState {
       try {
         if (type === 'metadata') {
           bridge.updateMetadata(
-            this.currentSong.title,
-            this.currentSong.artist,
-            this.currentSong.thumb || '',
+            cleanTitle,
+            cleanArtist,
+            thumbUrl,
             durationSec
           );
         }

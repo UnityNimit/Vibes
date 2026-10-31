@@ -40,6 +40,9 @@ class MediaPlaybackService : Service() {
     private var currentPositionSec: Double = 0.0
     private var isPlaying: Boolean = false
     private var currentArtworkBitmap: Bitmap? = null
+    @Volatile
+    private var currentArtworkTargetUrl: String = ""
+    private var isForegroundStarted: Boolean = false
 
     private var wakeLock: PowerManager.WakeLock? = null
     private var wifiLock: WifiManager.WifiLock? = null
@@ -271,10 +274,20 @@ class MediaPlaybackService : Service() {
                 return START_NOT_STICKY
             }
             ACTION_UPDATE_METADATA -> {
-                val title = intent.getStringExtra(EXTRA_TITLE) ?: currentTitle
-                val artist = intent.getStringExtra(EXTRA_ARTIST) ?: currentArtist
+                var title = intent.getStringExtra(EXTRA_TITLE) ?: currentTitle
+                var artist = intent.getStringExtra(EXTRA_ARTIST) ?: currentArtist
                 val artUrl = intent.getStringExtra(EXTRA_ARTWORK_URL) ?: currentArtworkUrl
                 val dur = intent.getDoubleExtra(EXTRA_DURATION, currentDurationSec)
+
+                if ((artist.isBlank() || artist.equals("Unknown Artist", ignoreCase = true) || artist.equals("Playing music", ignoreCase = true)) && title.contains(" - ")) {
+                    val parts = title.split(" - ", limit = 2)
+                    if (parts.size == 2 && parts[0].isNotBlank() && parts[1].isNotBlank()) {
+                        artist = parts[0].trim()
+                        title = parts[1].trim()
+                    }
+                }
+                if (title.isBlank()) title = "Vibes"
+                if (artist.isBlank()) artist = "Playing music"
 
                 val artChanged = artUrl != currentArtworkUrl
                 currentTitle = title
@@ -282,11 +295,13 @@ class MediaPlaybackService : Service() {
                 currentArtworkUrl = artUrl
                 currentDurationSec = dur
 
+                // Immediately update metadata & notification so title and artist appear with 0ms latency
+                updateMediaSessionMetadata()
+                updateNotification()
+
+                // Fetch artwork asynchronously in background
                 if (artChanged) {
                     loadArtworkAsync(artUrl)
-                } else {
-                    updateMediaSessionMetadata()
-                    updateNotification()
                 }
             }
             ACTION_UPDATE_STATE -> {
@@ -310,7 +325,130 @@ class MediaPlaybackService : Service() {
         return START_NOT_STICKY
     }
 
+    private fun cropAndScaleBitmap(src: Bitmap, targetSize: Int = 600): Bitmap {
+        val width = src.width
+        val height = src.height
+        if (width <= 0 || height <= 0) return src
+
+        val cropSize = minOf(width, height)
+        val xOffset = (width - cropSize) / 2
+        val yOffset = (height - cropSize) / 2
+
+        val cropped = if (width != cropSize || height != cropSize) {
+            try {
+                Bitmap.createBitmap(src, xOffset, yOffset, cropSize, cropSize)
+            } catch (e: Exception) {
+                src
+            }
+        } else {
+            src
+        }
+
+        val finalSize = minOf(targetSize, cropped.width)
+        return if (cropped.width != finalSize || cropped.height != finalSize) {
+            try {
+                val scaled = Bitmap.createScaledBitmap(cropped, finalSize, finalSize, true)
+                if (cropped != src && cropped != scaled) {
+                    cropped.recycle()
+                }
+                scaled
+            } catch (e: Exception) {
+                cropped
+            }
+        } else {
+            cropped
+        }
+    }
+
+    private fun fetchAndPrepareBitmap(urlStr: String): Bitmap? {
+        if (urlStr.isBlank()) return null
+
+        // 1. Local file path check
+        if (urlStr.startsWith("file://") || urlStr.startsWith("/")) {
+            try {
+                val path = if (urlStr.startsWith("file://")) urlStr.removePrefix("file://") else urlStr
+                val file = java.io.File(path)
+                if (file.exists() && file.canRead()) {
+                    val options = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                    }
+                    val decoded = BitmapFactory.decodeFile(file.absolutePath, options)
+                    if (decoded != null && decoded.width > 0 && decoded.height > 0) {
+                        return cropAndScaleBitmap(decoded)
+                    }
+                }
+            } catch (e: Exception) {
+                android.util.Log.w("MediaPlaybackService", "Failed to decode local artwork", e)
+            }
+        }
+
+        // 2. Build candidate URLs for remote image with automatic quality & 404 fallbacks
+        val candidates = mutableListOf<String>()
+        candidates.add(urlStr)
+
+        if (urlStr.contains("googleusercontent.com")) {
+            val highRes = urlStr.replace(Regex("=w\\d+-h\\d+[^?#]*"), "=w1200-h1200-l90-rj")
+                .replace(Regex("=s\\d+[^?#]*"), "=w1200-h1200")
+            if (highRes != urlStr && !candidates.contains(highRes)) {
+                candidates.add(0, highRes)
+            }
+        }
+
+        val ytMatch = Regex("(?:/vi/|vi_webp/|vi%2F)([a-zA-Z0-9_-]{11})").find(urlStr)
+        val videoId = ytMatch?.groupValues?.getOrNull(1)
+        if (!videoId.isNullOrBlank()) {
+            val maxres = "https://i.ytimg.com/vi/$videoId/maxresdefault.jpg"
+            val hq720 = "https://i.ytimg.com/vi/$videoId/hq720.jpg"
+            val hq = "https://i.ytimg.com/vi/$videoId/hqdefault.jpg"
+            val mq = "https://i.ytimg.com/vi/$videoId/mqdefault.jpg"
+
+            if (!candidates.contains(maxres)) candidates.add(0, maxres)
+            if (!candidates.contains(hq720)) candidates.add(hq720)
+            if (!candidates.contains(hq)) candidates.add(hq)
+            if (!candidates.contains(mq)) candidates.add(mq)
+        }
+
+        for (candidate in candidates) {
+            var connection: HttpURLConnection? = null
+            var stream: InputStream? = null
+            try {
+                val url = URL(candidate)
+                connection = (url.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 4000
+                    readTimeout = 4000
+                    instanceFollowRedirects = true
+                    doInput = true
+                    setRequestProperty(
+                        "User-Agent",
+                        "Mozilla/5.0 (Linux; Android 14; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+                    )
+                    setRequestProperty("Accept", "image/webp,image/apng,image/jpeg,image/*,*/*;q=0.8")
+                }
+                connection.connect()
+                val code = connection.responseCode
+                if (code in 200..299) {
+                    stream = connection.inputStream
+                    val options = BitmapFactory.Options().apply {
+                        inPreferredConfig = Bitmap.Config.RGB_565
+                    }
+                    val decoded = BitmapFactory.decodeStream(stream, null, options)
+                    if (decoded != null && decoded.width > 0 && decoded.height > 0) {
+                        return cropAndScaleBitmap(decoded)
+                    }
+                }
+            } catch (_: Throwable) {
+                // Try next candidate
+            } finally {
+                try { stream?.close() } catch (_: Exception) {}
+                try { connection?.disconnect() } catch (_: Exception) {}
+            }
+        }
+
+        return null
+    }
+
     private fun loadArtworkAsync(urlStr: String) {
+        currentArtworkTargetUrl = urlStr
         if (urlStr.isBlank()) {
             currentArtworkBitmap = null
             updateMediaSessionMetadata()
@@ -319,33 +457,13 @@ class MediaPlaybackService : Service() {
         }
 
         imageExecutor.execute {
-            var bitmap: Bitmap? = null
-            var connection: HttpURLConnection? = null
-            var stream: InputStream? = null
-            try {
-                val url = URL(urlStr)
-                connection = url.openConnection() as HttpURLConnection
-                connection.connectTimeout = 6000
-                connection.readTimeout = 6000
-                connection.doInput = true
-                connection.connect()
-                stream = connection.inputStream
-
-                val options = BitmapFactory.Options().apply {
-                    inPreferredConfig = Bitmap.Config.RGB_565
-                }
-                bitmap = BitmapFactory.decodeStream(stream, null, options)
-            } catch (e: Exception) {
-                // Silently fallback if image failed
-            } finally {
-                try { stream?.close() } catch (_: Exception) {}
-                try { connection?.disconnect() } catch (_: Exception) {}
-            }
-
+            val bitmap = fetchAndPrepareBitmap(urlStr)
             mainHandler.post {
-                currentArtworkBitmap = bitmap
-                updateMediaSessionMetadata()
-                updateNotification()
+                if (currentArtworkTargetUrl == urlStr) {
+                    currentArtworkBitmap = bitmap
+                    updateMediaSessionMetadata()
+                    updateNotification()
+                }
             }
         }
     }
@@ -354,11 +472,23 @@ class MediaPlaybackService : Service() {
         val metaBuilder = MediaMetadata.Builder()
             .putString(MediaMetadata.METADATA_KEY_TITLE, currentTitle)
             .putString(MediaMetadata.METADATA_KEY_ARTIST, currentArtist)
+            .putString(MediaMetadata.METADATA_KEY_ALBUM_ARTIST, currentArtist)
+            .putString(MediaMetadata.METADATA_KEY_ALBUM, currentArtist)
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_TITLE, currentTitle)
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_SUBTITLE, currentArtist)
+            .putString(MediaMetadata.METADATA_KEY_DISPLAY_DESCRIPTION, currentArtist)
             .putLong(MediaMetadata.METADATA_KEY_DURATION, (currentDurationSec * 1000).toLong())
 
-        currentArtworkBitmap?.let {
-            metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, it)
-            metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_ART, it)
+        currentArtworkBitmap?.let { bmp ->
+            metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, bmp)
+            metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_ART, bmp)
+            metaBuilder.putBitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON, bmp)
+        }
+
+        if (currentArtworkUrl.isNotBlank()) {
+            metaBuilder.putString(MediaMetadata.METADATA_KEY_ALBUM_ART_URI, currentArtworkUrl)
+            metaBuilder.putString(MediaMetadata.METADATA_KEY_ART_URI, currentArtworkUrl)
+            metaBuilder.putString(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI, currentArtworkUrl)
         }
 
         mediaSession.setMetadata(metaBuilder.build())
@@ -455,12 +585,18 @@ class MediaPlaybackService : Service() {
             .setSmallIcon(R.drawable.ic_notification_small)
             .setContentTitle(currentTitle.ifEmpty { "Vibes" })
             .setContentText(currentArtist.ifEmpty { "Playing music" })
+            .setSubText("Vibes")
             .setContentIntent(contentIntent)
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setOngoing(isPlaying)
+            .setShowWhen(false)
             .addAction(prevAction)
             .addAction(playPauseAction)
             .addAction(nextAction)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder.setColorized(true)
+        }
 
         currentArtworkBitmap?.let {
             builder.setLargeIcon(it)
@@ -484,10 +620,27 @@ class MediaPlaybackService : Service() {
                 } else {
                     startForeground(NOTIFICATION_ID, notification)
                 }
+                isForegroundStarted = true
             } catch (e: Exception) {
                 nm.notify(NOTIFICATION_ID, notification)
             }
         } else {
+            if (!isForegroundStarted) {
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        startForeground(
+                            NOTIFICATION_ID,
+                            notification,
+                            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                        )
+                    } else {
+                        startForeground(NOTIFICATION_ID, notification)
+                    }
+                    isForegroundStarted = true
+                } catch (e: Exception) {
+                    nm.notify(NOTIFICATION_ID, notification)
+                }
+            }
             try {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                     stopForeground(STOP_FOREGROUND_DETACH)
@@ -507,6 +660,9 @@ class MediaPlaybackService : Service() {
 
     private fun stopForegroundService() {
         isPlayingNow = false
+        isForegroundStarted = false
+        currentArtworkBitmap = null
+        currentArtworkTargetUrl = ""
         releaseLocks()
         try {
             MainActivity.sendMediaCommand("pause")
