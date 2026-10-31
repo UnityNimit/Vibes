@@ -907,11 +907,24 @@
     <!-- Top Bar Action Row: Now Playing Context Indicator on Left, Pure Arrow Icon on Right -->
     <div class="w-full flex items-center justify-between px-2 pt-1 flex-shrink-0 z-30">
       <!-- Now Playing Context Indicator -->
-      <div class="flex items-center gap-1.5 text-xs font-mono text-neutral-400 select-none min-w-0 pr-4">
-        <span class="text-neutral-500 uppercase tracking-wider text-[10px] sm:text-xs flex-shrink-0">PLAYING FROM</span>
-        <span class="text-white font-medium truncate text-xs sm:text-sm">
-          {player.currentContext.title}
-        </span>
+      <div class="flex items-center gap-2 text-xs font-mono text-neutral-400 select-none min-w-0 pr-4">
+        {#if onClose}
+          <button
+            type="button"
+            onclick={onClose}
+            class="w-7 h-7 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all cursor-pointer flex-shrink-0 -ml-1"
+            title="Minimize (Esc)"
+            aria-label="Minimize player"
+          >
+            <BackIcon size={18} strokeWidth={2.2} direction="down" />
+          </button>
+        {/if}
+        <div class="flex items-center gap-1.5 min-w-0">
+          <span class="text-neutral-500 uppercase tracking-wider text-[10px] sm:text-xs flex-shrink-0">PLAYING FROM</span>
+          <span class="text-white font-medium truncate text-xs sm:text-sm">
+            {player.currentContext.title}
+          </span>
+        </div>
       </div>
 
       <button

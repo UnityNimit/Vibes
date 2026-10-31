@@ -89,6 +89,22 @@ class NavigationStore {
   }
 
   /**
+   * Toggle Now Playing bigger player open/close.
+   */
+  toggleNowPlaying() {
+    if (this.currentTab === 'now_playing') {
+      const target =
+        this.previousTab && this.previousTab !== 'now_playing'
+          ? this.previousTab
+          : this.tabHistory[this.tabHistory.length - 1] || 'search';
+      this.currentTab = target;
+    } else {
+      this.previousTab = this.currentTab;
+      this.currentTab = 'now_playing';
+    }
+  }
+
+  /**
    * Main back navigation coordinator.
    * Traverses from highest priority overlay down to root exit safeguard.
    */

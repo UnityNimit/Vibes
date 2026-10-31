@@ -394,9 +394,14 @@
           </div>
         </div>
         <div class="flex items-center gap-2 mt-0.5 min-w-0">
-          <p class="text-xs text-neutral-400 font-normal truncate" title={getCleanArtist(player.currentSong)}>
+          <button
+            type="button"
+            onclick={onToggleNowPlaying}
+            class="text-xs text-neutral-400 font-normal truncate hover:text-neutral-200 cursor-pointer text-left block"
+            title={getCleanArtist(player.currentSong)}
+          >
             {getCleanArtist(player.currentSong)}
-          </p>
+          </button>
           {#if jamStore.status === 'connected'}
             <button
               type="button"
