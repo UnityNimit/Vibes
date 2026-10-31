@@ -7,6 +7,7 @@
   import { feedStore } from '../feedStore.svelte';
   import { searchStore } from '../searchStore.svelte';
   import { cleanArtistName, formatSongSize } from '../utils';
+  import { navigationStore } from '../navigationStore.svelte';
   import { songContextMenu } from '../songContextMenuStore.svelte';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
@@ -222,6 +223,22 @@
   function clearSearch() {
     searchStore.clear();
   }
+
+  $effect(() => {
+    if (hasSearched || query.trim() !== '') {
+      return navigationStore.register('search_query', 10, () => {
+        if (typeof document !== 'undefined') {
+          const active = document.activeElement;
+          if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) {
+            active.blur();
+            return true;
+          }
+        }
+        clearSearch();
+        return true;
+      });
+    }
+  });
 </script>
 
 {#snippet songCard(song: Song, sectionTitle = 'Explore', songList?: Song[], index?: number)}

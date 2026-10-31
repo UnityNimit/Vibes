@@ -12,12 +12,12 @@
   import JamView from '$lib/components/JamView.svelte';
   import BottomPlayer from '$lib/components/BottomPlayer.svelte';
   import SongContextMenuModal from '$lib/components/SongContextMenuModal.svelte';
+  import { navigationStore } from '$lib/navigationStore.svelte';
   import { player } from '$lib/player.svelte';
 
   type Tab = 'search' | 'liked' | 'saved' | 'playlists' | 'jam' | 'settings' | 'now_playing';
 
-  let currentTab = $state<Tab>('search');
-  let previousTab = $state<Tab>('search');
+  let currentTab = $derived(navigationStore.currentTab as Tab);
   let isMobileView = $state(isMobile());
 
   onMount(() => {
@@ -27,26 +27,38 @@
     }
   });
 
-  function handleSelectTab(tab: Tab) {
-    if (currentTab !== 'now_playing' && tab === 'now_playing') {
-      previousTab = currentTab;
+  $effect(() => {
+    if (currentTab === 'now_playing') {
+      return navigationStore.register('now_playing_fullscreen', 30, () => {
+        toggleNowPlaying();
+        return true;
+      });
     }
-    currentTab = tab;
+  });
+
+  function handleSelectTab(tab: Tab) {
+    navigationStore.recordTab(tab);
   }
 
   function toggleNowPlaying() {
-    if (currentTab === 'now_playing') {
-      currentTab = previousTab;
-    } else {
-      previousTab = currentTab;
-      currentTab = 'now_playing';
-    }
+    navigationStore.toggleNowPlaying();
   }
 
   function handleKeyDown(e: KeyboardEvent) {
     // Avoid hijacking when typing in an input
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+      if (e.key === 'Escape') {
+        (e.target as HTMLElement).blur();
+        e.preventDefault();
+      }
       return;
+    }
+
+    if (e.key === 'Escape') {
+      if (navigationStore.handleBack() === 'handled') {
+        e.preventDefault();
+        return;
+      }
     }
 
     if (e.code === 'Space') {
@@ -68,8 +80,7 @@
       if (currentTab === 'now_playing') {
         player.showLyrics = !player.showLyrics;
       } else {
-        previousTab = currentTab;
-        currentTab = 'now_playing';
+        navigationStore.recordTab('now_playing');
         player.showLyrics = true;
       }
     }
@@ -139,4 +150,28 @@
 
   <!-- Global Song Context Menu & Playlist Selector (Desktop Right-Click & Mobile Long-Press) -->
   <SongContextMenuModal />
+
+  {#if navigationStore.showToast}
+    <div
+      class="fixed bottom-24 sm:bottom-28 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 rounded-full bg-neutral-900/95 text-white border border-white/10 text-xs font-medium shadow-[0_8px_32px_rgba(0,0,0,0.8)] backdrop-blur-xl pointer-events-none transition-all duration-200 anim-toast-up"
+    >
+      {navigationStore.toastMessage}
+    </div>
+  {/if}
 </div>
+
+<style>
+  @keyframes toastUp {
+    from {
+      opacity: 0;
+      transform: translate(-50%, 8px) scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: translate(-50%, 0) scale(1);
+    }
+  }
+  .anim-toast-up {
+    animation: toastUp 0.18s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+</style>

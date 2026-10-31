@@ -4,6 +4,7 @@
   import { songContextMenuStore } from '../songContextMenuStore.svelte';
   import { playlistStore } from '../playlistStore.svelte';
   import { likedStore } from '../likedStore.svelte';
+  import { navigationStore } from '../navigationStore.svelte';
   import TrackImage from './TrackImage.svelte';
   import HeartIcon from './HeartIcon.svelte';
 
@@ -22,6 +23,24 @@
   let song = $derived(songContextMenuStore.song);
   let isOpen = $derived(songContextMenuStore.isOpen && !!song);
   let isLiked = $derived(song ? likedStore.isLiked(song.id) : false);
+
+  $effect(() => {
+    if (songContextMenuStore.isCreating) {
+      return navigationStore.register('ctx_create', 60, () => {
+        songContextMenuStore.isCreating = false;
+        return true;
+      });
+    }
+  });
+
+  $effect(() => {
+    if (isOpen) {
+      return navigationStore.register('ctx_menu', 50, () => {
+        songContextMenuStore.close();
+        return true;
+      });
+    }
+  });
 
   // Smart desktop position clamping so the menu never renders off-screen
   $effect(() => {

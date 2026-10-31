@@ -1,5 +1,6 @@
 <script lang="ts">
   import { jamStore } from '../jamStore.svelte';
+  import { navigationStore } from '../navigationStore.svelte';
   import JamIcon from './JamIcon.svelte';
 
   interface Props {
@@ -14,6 +15,15 @@
   let copyTimeout: ReturnType<typeof setTimeout> | null = null;
 
   let shouldShow = $derived(isOpen || jamStore.isModalOpen);
+
+  $effect(() => {
+    if (shouldShow) {
+      return navigationStore.register('jam_modal', 50, () => {
+        closeAll();
+        return true;
+      });
+    }
+  });
 
   function closeAll() {
     onClose();

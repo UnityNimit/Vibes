@@ -4,6 +4,7 @@
   import { player } from '../player.svelte';
   import { playlistStore } from '../playlistStore.svelte';
   import { jamStore } from '../jamStore.svelte';
+  import { navigationStore } from '../navigationStore.svelte';
   import { formatTime } from '../utils';
   import WaveProgressBar from './WaveProgressBar.svelte';
   import TrackImage from './TrackImage.svelte';
@@ -38,6 +39,25 @@
   let isCurrentSongInAnyPlaylist = $derived(
     player.currentSong ? playlistStore.isSongInAnyPlaylist(player.currentSong.id) : false
   );
+
+  $effect(() => {
+    if (showCreateInput) {
+      return navigationStore.register('bp_create_input', 60, () => {
+        showCreateInput = false;
+        return true;
+      });
+    }
+  });
+
+  $effect(() => {
+    if (showPlaylistMenu) {
+      return navigationStore.register('bp_playlist_menu', 50, () => {
+        showPlaylistMenu = false;
+        showCreateInput = false;
+        return true;
+      });
+    }
+  });
 
   function toggleCreateInput() {
     showCreateInput = !showCreateInput;

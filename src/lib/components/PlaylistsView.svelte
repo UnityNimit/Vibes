@@ -5,6 +5,7 @@
   import { player } from '../player.svelte';
   import { savedStore } from '../savedStore.svelte';
   import { formatSongSize } from '../utils';
+  import { navigationStore } from '../navigationStore.svelte';
   import { songContextMenu } from '../songContextMenuStore.svelte';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
@@ -27,6 +28,34 @@
   let selectedPlaylist = $derived<Playlist | null>(
     playlistStore.playlists.find((p) => p.id === playlistStore.selectedPlaylistId) ?? null
   );
+
+  $effect(() => {
+    if (isCreating) {
+      return navigationStore.register('pl_creating', 60, () => {
+        isCreating = false;
+        return true;
+      });
+    }
+  });
+
+  $effect(() => {
+    if (isRenaming) {
+      return navigationStore.register('pl_renaming', 60, () => {
+        isRenaming = false;
+        return true;
+      });
+    }
+  });
+
+  $effect(() => {
+    if (selectedPlaylist) {
+      return navigationStore.register('pl_detail', 20, () => {
+        playlistStore.selectedPlaylistId = null;
+        isRenaming = false;
+        return true;
+      });
+    }
+  });
 
   function startCreate() {
     isCreating = true;

@@ -1,5 +1,6 @@
 package com.vibes.music
 
+import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
@@ -8,6 +9,7 @@ import android.os.Bundle
 import android.view.WindowManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.activity.OnBackPressedCallback
 import androidx.core.app.ActivityCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -35,6 +37,17 @@ class MainActivity : TauriActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setupPermanentStatusBar()
+
+        // Modern Android 13+ / Predictive Back & Jetpack OnBackPressedCallback
+        try {
+            onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    handleBackNavigation()
+                }
+            })
+        } catch (t: Throwable) {
+            android.util.Log.w("MainActivity", "onBackPressedDispatcher setup error", t)
+        }
 
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -74,15 +87,23 @@ class MainActivity : TauriActivity() {
         }
     }
 
-    @Suppress("DEPRECATION")
-    override fun onBackPressed() {
+    private fun handleBackNavigation() {
         val webView = activeWebView?.get()
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack()
+        if (webView != null) {
+            webView.evaluateJavascript("window.__handleBackNavigation ? window.__handleBackNavigation() : 'unhandled'") { result ->
+                val clean = result?.replace("\"", "")?.trim()
+                if (clean == "exit" || clean == "unhandled" || clean == null) {
+                    moveTaskToBack(true)
+                }
+            }
         } else {
-            // Move task to background without killing activity or stopping audio
             moveTaskToBack(true)
         }
+    }
+
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        handleBackNavigation()
     }
 
     override fun onDestroy() {
@@ -146,6 +167,13 @@ class MainActivity : TauriActivity() {
         @JavascriptInterface
         fun stopNotification() {
             MediaPlaybackService.stopNotification(context)
+        }
+
+        @JavascriptInterface
+        fun moveAppToBack() {
+            (context as? Activity)?.runOnUiThread {
+                (context as? Activity)?.moveTaskToBack(true)
+            }
         }
     }
 }

@@ -7,6 +7,7 @@
   import { likedStore } from '../likedStore.svelte';
   import { savedStore } from '../savedStore.svelte';
   import { formatTime } from '../utils';
+  import { navigationStore } from '../navigationStore.svelte';
   import { songContextMenu } from '../songContextMenuStore.svelte';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
@@ -36,6 +37,53 @@
   let showMobilePlaylistMenu = $state(false);
   let isCreatingPlaylist = $state(false);
   let newPlaylistInput = $state('');
+
+  // Hierarchical back button navigation registrations
+  $effect(() => {
+    if (isCreatingPlaylist) {
+      return navigationStore.register('np_create_playlist', 60, () => {
+        isCreatingPlaylist = false;
+        return true;
+      });
+    }
+  });
+
+  $effect(() => {
+    if (showMobilePlaylistMenu) {
+      return navigationStore.register('np_playlist_menu', 50, () => {
+        showMobilePlaylistMenu = false;
+        isCreatingPlaylist = false;
+        return true;
+      });
+    }
+  });
+
+  $effect(() => {
+    if (showSimilarMobile) {
+      return navigationStore.register('np_similar_drawer', 40, () => {
+        showSimilarMobile = false;
+        return true;
+      });
+    }
+  });
+
+  $effect(() => {
+    if (player.showLyrics) {
+      return navigationStore.register('np_lyrics', 35, () => {
+        player.showLyrics = false;
+        return true;
+      });
+    }
+  });
+
+  $effect(() => {
+    if (!isMobileView && showSimilar) {
+      return navigationStore.register('np_similar_desktop', 25, () => {
+        showSimilar = false;
+        return true;
+      });
+    }
+  });
 
   let isCurrentSongInAnyPlaylist = $derived(
     player.currentSong ? playlistStore.isSongInAnyPlaylist(player.currentSong.id) : false
