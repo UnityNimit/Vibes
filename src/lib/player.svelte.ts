@@ -6,6 +6,7 @@ import { settings } from './settings.svelte';
 import { savedStore } from './savedStore.svelte';
 import { likedStore } from './likedStore.svelte';
 import { feedStore } from './feedStore.svelte';
+import { networkStore } from './networkStore.svelte';
 
 class PlayerState {
   currentSong = $state<Song | null>(null);
@@ -68,6 +69,11 @@ class PlayerState {
   private listenedSeconds = 0;
   private lastTimeUpdate = 0;
   private currentBlobUrl: string | null = null;
+  private isRecoveringStream = false;
+  private recoveryTimeout: ReturnType<typeof setTimeout> | null = null;
+  private lastKnownPosition = 0;
+  private stalledCheckTimer: ReturnType<typeof setTimeout> | null = null;
+  private wasPlayingBeforeInterruption = false;
 
   constructor() {
     if (typeof window !== 'undefined') {
@@ -96,6 +102,33 @@ class PlayerState {
 
       this.initAudio();
       this.initMediaBridge();
+
+      window.addEventListener('online', () => {
+        console.log('[Player Network] Online event');
+        if (this.currentSong && !this.isCached) {
+          if (this.isLoading || this.wasPlayingBeforeInterruption || (!this.isPlaying && this.lastKnownPosition > 0)) {
+            console.log('[Player Network] Auto-recovering interrupted stream at position', this.lastKnownPosition);
+            this.recoverStreamPlayback(this.lastKnownPosition);
+          }
+        }
+        if (this.currentSong && (!this.lyrics.synced && !this.lyrics.plain)) {
+          this.fetchLyrics(this.currentSong);
+        }
+      });
+
+      window.addEventListener('offline', () => {
+        console.warn('[Player Network] Offline event');
+        if (this.isPlaying) {
+          this.wasPlayingBeforeInterruption = true;
+          this.lastKnownPosition = this.currentTime;
+        }
+      });
+
+      window.addEventListener('vibes:network-online', () => {
+        if (this.currentSong && !this.isCached && (this.isLoading || this.wasPlayingBeforeInterruption)) {
+          this.recoverStreamPlayback(this.lastKnownPosition || this.currentTime);
+        }
+      });
       try {
         if ((window as any).__TAURI_INTERNALS__) {
           listen<string>('cache-updated', async () => {
@@ -127,6 +160,9 @@ class PlayerState {
         }
 
         this.currentTime = now;
+        if (now > 0) {
+          this.lastKnownPosition = now;
+        }
         this.updateActiveLyric();
 
         // 1. Automatic download only happens when the complete song has been listened to
@@ -163,6 +199,11 @@ class PlayerState {
     this.audio.addEventListener('playing', () => {
       this.isPlaying = true;
       this.isLoading = false;
+      this.wasPlayingBeforeInterruption = false;
+      this.clearStallWatchdog();
+      if (this.audio && !isNaN(this.audio.currentTime) && this.audio.currentTime > 0) {
+        this.lastKnownPosition = this.audio.currentTime;
+      }
       if (this.currentSong) {
         feedStore.recordPlay(this.currentSong);
       }
@@ -176,16 +217,25 @@ class PlayerState {
     });
 
     this.audio.addEventListener('pause', () => {
-      this.isPlaying = false;
+      if (!this.isRecoveringStream) {
+        this.isPlaying = false;
+      }
       this.syncMediaNotification('state');
     });
 
     this.audio.addEventListener('waiting', () => {
       this.isLoading = true;
+      this.armStallWatchdog();
+    });
+
+    this.audio.addEventListener('stalled', () => {
+      this.isLoading = true;
+      this.armStallWatchdog();
     });
 
     this.audio.addEventListener('canplay', () => {
       this.isLoading = false;
+      this.clearStallWatchdog();
     });
 
     this.audio.addEventListener('ended', () => {
@@ -195,6 +245,7 @@ class PlayerState {
     this.audio.addEventListener('error', async (e) => {
       const audioErr = this.audio?.error;
       console.error('[Audio Error]', e, 'Code:', audioErr?.code, 'Message:', audioErr?.message);
+      this.clearStallWatchdog();
 
       // 1. If local asset playback fails, try loading direct bytes into a Blob URL
       if (this.currentSong && this.isCached && !this.currentBlobUrl) {
@@ -204,7 +255,9 @@ class PlayerState {
             const blob = new Blob([new Uint8Array(bytes)], { type: 'audio/mp4' });
             this.currentBlobUrl = URL.createObjectURL(blob);
             if (this.audio) {
+              const pos = this.currentTime || this.lastKnownPosition;
               this.audio.src = this.currentBlobUrl;
+              if (pos > 0) this.audio.currentTime = pos;
               await this.audio.play();
               this.isPlaying = true;
               this.isLoading = false;
@@ -216,30 +269,15 @@ class PlayerState {
         }
       }
 
-      // 2. Automatic self-healing: if cached or blob playback fails on Windows/WebView, immediately resolve and play live stream
-      if (this.currentSong && (this.isCached || this.currentBlobUrl)) {
-        console.warn('[Audio Recovery] Cached audio playback failed. Seamlessly fetching online stream...');
-        this.isCached = false;
-        if (this.currentBlobUrl) {
-          URL.revokeObjectURL(this.currentBlobUrl);
-          this.currentBlobUrl = null;
-        }
-        try {
-          const freshRes = await invoke<StreamResult>('get_online_stream', { song: this.currentSong });
-          if (freshRes.url && this.audio) {
-            this.audio.src = freshRes.url;
-            await this.audio.play();
-            this.isPlaying = true;
-            this.isLoading = false;
-            return;
-          }
-        } catch (recoverErr) {
-          console.error('[Audio Recovery Failed]', recoverErr);
-        }
+      // 2. Automatic seamless stream recovery from same position
+      if (this.currentSong) {
+        console.warn('[Audio Recovery] Error on audio element. Seamlessly recovering from', this.currentTime || this.lastKnownPosition);
+        this.wasPlayingBeforeInterruption = true;
+        this.recoverStreamPlayback(this.currentTime || this.lastKnownPosition);
+      } else {
+        this.isLoading = false;
+        this.isPlaying = false;
       }
-
-      this.isLoading = false;
-      this.isPlaying = false;
     });
   }
 
@@ -510,12 +548,18 @@ class PlayerState {
 
     // Check if clicked the same song
     if (this.currentSong?.id === song.id && this.audio.src) {
+      if (this.audio.error || (this.isLoading && !this.isCached)) {
+        this.recoverStreamPlayback(this.currentTime || this.lastKnownPosition);
+        return;
+      }
       if (syncStartPosition !== undefined && syncStartPosition > 0) {
         this.audio.currentTime = syncStartPosition;
         this.currentTime = syncStartPosition;
       }
       if (autoPlay) {
-        this.audio.play().catch(() => {});
+        this.audio.play().catch(() => {
+          this.recoverStreamPlayback(this.currentTime || this.lastKnownPosition);
+        });
         this.isPlaying = true;
       } else {
         this.audio.pause();
@@ -558,23 +602,7 @@ class PlayerState {
     this.isLiked = likedStore.isLiked(safeSong.id);
 
     // Fetch lyrics in background
-    this.isLoadingLyrics = true;
-    const durSecs = safeSong.duration ? parseDurationToSeconds(safeSong.duration) : null;
-    const durationParam = durSecs && durSecs > 0 ? durSecs : null;
-    invoke<{ synced: string | null; plain: string | null }>('get_song_lyrics', {
-      title: safeSong.title,
-      artist: safeSong.artist,
-      durationSecs: durationParam
-    }).then(res => {
-      this.lyrics = res;
-      if (res.synced) {
-        this.parsedLyrics = this.parseLyrics(res.synced);
-      }
-      this.isLoadingLyrics = false;
-    }).catch(err => {
-      console.log('Lyrics not found:', err);
-      this.isLoadingLyrics = false;
-    });
+    this.fetchLyrics(safeSong);
 
     try {
       // 1. Check ultra-fast in-memory stream cache
@@ -695,7 +723,14 @@ class PlayerState {
       if (this.jamDelegate.onUserToggle?.()) return;
     }
     if (!this.audio || !this.currentSong) return;
-    this.audio.play().catch((err) => console.warn('Audio resume failed:', err));
+    if (this.audio.error || (this.isLoading && !this.isCached)) {
+      this.recoverStreamPlayback(this.currentTime || this.lastKnownPosition);
+      return;
+    }
+    this.audio.play().catch((err) => {
+      console.warn('Audio resume failed, recovering stream:', err);
+      this.recoverStreamPlayback(this.currentTime || this.lastKnownPosition);
+    });
     this.isPlaying = true;
     this.syncMediaNotification('state');
     if (!fromSync && this.onPlaybackChange) {
@@ -1002,6 +1037,171 @@ class PlayerState {
         console.warn('Navigator mediaSession registration error:', e);
       }
     }
+  }
+
+
+  fetchLyrics(safeSong: Song) {
+    this.isLoadingLyrics = true;
+    const durSecs = safeSong.duration ? parseDurationToSeconds(safeSong.duration) : null;
+    const durationParam = durSecs && durSecs > 0 ? durSecs : null;
+    invoke<{ synced: string | null; plain: string | null }>('get_song_lyrics', {
+      title: safeSong.title,
+      artist: safeSong.artist,
+      durationSecs: durationParam
+    }).then(res => {
+      if (this.currentSong?.id === safeSong.id) {
+        this.lyrics = res;
+        if (res.synced) {
+          this.parsedLyrics = this.parseLyrics(res.synced);
+        }
+      }
+      this.isLoadingLyrics = false;
+    }).catch(err => {
+      console.log('Lyrics not found:', err);
+      this.isLoadingLyrics = false;
+    });
+  }
+
+  private armStallWatchdog() {
+    if (this.stalledCheckTimer) return;
+    this.stalledCheckTimer = setTimeout(() => {
+      this.stalledCheckTimer = null;
+      if (this.isLoading && (this.isPlaying || this.wasPlayingBeforeInterruption) && !this.isCached && this.currentSong) {
+        console.warn('[Audio Watchdog] Stream stalled for 4.5s. Initiating auto-recovery at', this.currentTime || this.lastKnownPosition);
+        this.recoverStreamPlayback(this.currentTime || this.lastKnownPosition);
+      }
+    }, 4500);
+  }
+
+  private clearStallWatchdog() {
+    if (this.stalledCheckTimer) {
+      clearTimeout(this.stalledCheckTimer);
+      this.stalledCheckTimer = null;
+    }
+  }
+
+  async recoverStreamPlayback(forcedPosition?: number) {
+    if (!this.currentSong) return;
+    if (this.isRecoveringStream) return;
+    this.isRecoveringStream = true;
+
+    const song = this.currentSong;
+    const resumePos = forcedPosition !== undefined && forcedPosition >= 0
+      ? forcedPosition
+      : (this.currentTime > 0 ? this.currentTime : this.lastKnownPosition);
+
+    console.log(`[Stream Recovery] Recovering "${song.title}" from ${resumePos.toFixed(2)}s`);
+    this.isLoading = true;
+    this.clearStallWatchdog();
+
+    // Invalidate stale in-memory stream URLs
+    this.streamCache.delete(song.id);
+    try {
+      await invoke('invalidate_stream', { videoId: song.id }).catch(() => {});
+    } catch (_) {}
+
+    try {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        console.warn('[Stream Recovery] Device currently offline. Auto-recovery will fire upon reconnection.');
+        this.isRecoveringStream = false;
+        this.wasPlayingBeforeInterruption = true;
+        return;
+      }
+
+      const freshRes = await invoke<StreamResult>('get_online_stream', {
+        song,
+        forceRefresh: true
+      });
+
+      if (!freshRes || !freshRes.url) {
+        throw new Error('No stream URL received');
+      }
+
+      if (this.currentSong?.id !== song.id) {
+        this.isRecoveringStream = false;
+        return;
+      }
+
+      this.streamCache.set(song.id, { result: freshRes, timestamp: Date.now() });
+      this.isCached = freshRes.is_cached;
+
+      if (this.currentBlobUrl) {
+        URL.revokeObjectURL(this.currentBlobUrl);
+        this.currentBlobUrl = null;
+      }
+
+      if (!this.audio) {
+        this.isRecoveringStream = false;
+        return;
+      }
+
+      this.audio.src = freshRes.url;
+      if (resumePos > 0) {
+        try {
+          this.audio.currentTime = resumePos;
+          this.currentTime = resumePos;
+          this.lastKnownPosition = resumePos;
+        } catch (_) {}
+      }
+
+      const onCanPlay = async () => {
+        this.audio?.removeEventListener('canplay', onCanPlay);
+        try {
+          if (this.audio && resumePos > 0 && Math.abs(this.audio.currentTime - resumePos) > 1.5) {
+            this.audio.currentTime = resumePos;
+          }
+          await this.audio?.play();
+          this.isPlaying = true;
+          this.isLoading = false;
+          this.isRecoveringStream = false;
+          this.wasPlayingBeforeInterruption = false;
+          this.syncMediaNotification('state');
+          console.log(`[Stream Recovery Success] Resumed "${song.title}" at ${resumePos.toFixed(2)}s`);
+        } catch (err) {
+          console.warn('[Stream Recovery Playback Failed]', err);
+          this.isRecoveringStream = false;
+          this.scheduleStreamRecoveryRetry(resumePos);
+        }
+      };
+
+      this.audio.addEventListener('canplay', onCanPlay, { once: true });
+      this.audio.load();
+
+      // Fallback timer if canplay doesn't fire within 4.5s
+      setTimeout(async () => {
+        if (this.isRecoveringStream && this.currentSong?.id === song.id) {
+          this.audio?.removeEventListener('canplay', onCanPlay);
+          try {
+            if (this.audio) {
+              if (resumePos > 0) this.audio.currentTime = resumePos;
+              await this.audio.play();
+              this.isPlaying = true;
+              this.isLoading = false;
+              this.isRecoveringStream = false;
+              this.wasPlayingBeforeInterruption = false;
+              this.syncMediaNotification('state');
+            }
+          } catch (_) {
+            this.isRecoveringStream = false;
+            this.scheduleStreamRecoveryRetry(resumePos);
+          }
+        }
+      }, 4500);
+
+    } catch (err) {
+      console.error('[Stream Recovery Error]', err);
+      this.isRecoveringStream = false;
+      this.scheduleStreamRecoveryRetry(resumePos);
+    }
+  }
+
+  private scheduleStreamRecoveryRetry(targetPos: number) {
+    if (this.recoveryTimeout) clearTimeout(this.recoveryTimeout);
+    this.recoveryTimeout = setTimeout(() => {
+      if (this.currentSong && (this.isPlaying || this.wasPlayingBeforeInterruption || this.isLoading)) {
+        this.recoverStreamPlayback(targetPos);
+      }
+    }, 2500);
   }
 
   syncMediaNotification(type: 'metadata' | 'state') {

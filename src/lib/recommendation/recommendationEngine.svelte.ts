@@ -58,6 +58,13 @@ export class RecommendationEngine {
         if (this.trendingSongs.length === 0 || this.recommendedSongs.length === 0 || isStale) {
           setTimeout(() => this.refreshAllFeeds(true), 200);
         }
+
+        window.addEventListener('vibes:network-online', () => {
+          if (this.trendingSongs.length === 0 || this.recommendedSongs.length === 0) {
+            console.log('[RecommendationEngine] Network reconnected with empty feeds, refreshing...');
+            this.refreshAllFeeds(true);
+          }
+        });
       } catch (e) {
         console.error('[RecommendationEngine] Constructor init error:', e);
       }

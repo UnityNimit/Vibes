@@ -25,6 +25,17 @@ class SearchStore {
     old: 0,
   });
 
+  constructor() {
+    if (typeof window !== 'undefined') {
+      window.addEventListener('vibes:network-online', () => {
+        if (this.hasSearched && this.results.length === 0 && this.query.trim()) {
+          console.log('[SearchStore] Auto-retrying search upon network reconnection:', this.query);
+          this.search(this.query);
+        }
+      });
+    }
+  }
+
   async search(searchQuery?: string) {
     const q = (searchQuery ?? this.query).trim();
     if (!q) return;

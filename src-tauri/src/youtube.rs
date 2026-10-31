@@ -700,9 +700,21 @@ pub async fn resolve_stream_url_innertube(video_id: &str) -> Result<String, Stri
     Err("No direct audio streams returned".to_string())
 }
 
+pub fn invalidate_stream_cache(video_id: &str) {
+    if let Ok(mut cache) = STREAM_CACHE.write() {
+        cache.remove(video_id);
+    }
+}
+
 pub async fn resolve_stream_url(video_id: &str) -> Result<String, String> {
+    resolve_stream_url_force(video_id, false).await
+}
+
+pub async fn resolve_stream_url_force(video_id: &str, force_fresh: bool) -> Result<String, String> {
     // 1. Check ultra-fast in-memory stream cache
-    if let Ok(cache) = STREAM_CACHE.read() {
+    if force_fresh {
+        invalidate_stream_cache(video_id);
+    } else if let Ok(cache) = STREAM_CACHE.read() {
         if let Some((cached_url, instant)) = cache.get(video_id) {
             if instant.elapsed() < Duration::from_secs(4 * 3600) {
                 return Ok(cached_url.clone());

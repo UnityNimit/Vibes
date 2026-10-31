@@ -2,6 +2,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { player } from '../player.svelte';
   import { songContextMenu } from '../songContextMenuStore.svelte';
+  import { networkStore } from '../networkStore.svelte';
   import TrackImage from './TrackImage.svelte';
   import type { SearchPage, Song } from '../types';
 
@@ -80,6 +81,13 @@
 
   $effect(() => {
     loadCategory('trending');
+  });
+
+  $effect(() => {
+    const epoch = networkStore.reconnectEpoch;
+    if (epoch > 0 && trendingSongs.length === 0 && !isLoading) {
+      loadCategory(activeCategory);
+    }
   });
 </script>
 

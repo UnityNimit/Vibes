@@ -20,7 +20,7 @@ use youtube::{
     get_more_similar_songs as fetch_more_similar_songs,
     get_new_releases as fetch_new_releases,
     get_similar_songs as fetch_similar_songs,
-    get_suggestions, get_trending_feed as fetch_trending_feed, resolve_stream_url,
+    get_suggestions, get_trending_feed as fetch_trending_feed, invalidate_stream_cache, resolve_stream_url_force,
     search_continuation, search_songs,
 };
 use tauri::Manager;
@@ -67,19 +67,22 @@ async fn get_search_suggestions(query: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-async fn get_stream(song: Song, auto_save: Option<bool>) -> Result<StreamResult, String> {
-    // 1. Check if already cached locally
-    if let Some(cached_path) = get_cached_file(&song.id) {
-        let path_str = cached_path.to_string_lossy().to_string();
-        return Ok(StreamResult {
-            url: path_str.clone(),
-            is_cached: true,
-            local_path: Some(path_str),
-        });
+async fn get_stream(song: Song, auto_save: Option<bool>, force_refresh: Option<bool>) -> Result<StreamResult, String> {
+    // 1. Check if already cached locally (unless force_refresh is requested)
+    let force = force_refresh.unwrap_or(false);
+    if !force {
+        if let Some(cached_path) = get_cached_file(&song.id) {
+            let path_str = cached_path.to_string_lossy().to_string();
+            return Ok(StreamResult {
+                url: path_str.clone(),
+                is_cached: true,
+                local_path: Some(path_str),
+            });
+        }
     }
 
     // 2. Resolve stream URL from YouTube for instant playback (checks in-memory cache first)
-    let stream_url = resolve_stream_url(&song.id).await?;
+    let stream_url = resolve_stream_url_force(&song.id, force).await?;
 
     // 3. Trigger automatic background cache if explicitly requested
     if auto_save.unwrap_or(false) {
@@ -97,13 +100,20 @@ async fn get_stream(song: Song, auto_save: Option<bool>) -> Result<StreamResult,
 }
 
 #[tauri::command]
-async fn get_online_stream(song: Song) -> Result<StreamResult, String> {
-    let stream_url = resolve_stream_url(&song.id).await?;
+async fn get_online_stream(song: Song, force_refresh: Option<bool>) -> Result<StreamResult, String> {
+    let force = force_refresh.unwrap_or(true);
+    let stream_url = resolve_stream_url_force(&song.id, force).await?;
     Ok(StreamResult {
         url: stream_url,
         is_cached: false,
         local_path: None,
     })
+}
+
+#[tauri::command]
+async fn invalidate_stream(video_id: String) -> Result<(), String> {
+    invalidate_stream_cache(&video_id);
+    Ok(())
 }
 
 #[tauri::command]
@@ -117,7 +127,7 @@ async fn get_cached_audio_bytes(video_id: String) -> Result<Vec<u8>, String> {
 
 #[tauri::command]
 async fn prefetch_stream(song: Song) -> Result<StreamResult, String> {
-    get_stream(song, Some(false)).await
+    get_stream(song, Some(false), Some(false)).await
 }
 
 #[tauri::command]
@@ -311,6 +321,7 @@ pub fn run() {
             get_search_suggestions,
             get_stream,
             get_online_stream,
+            invalidate_stream,
             get_cached_audio_bytes,
             prefetch_stream,
             trigger_auto_cache,

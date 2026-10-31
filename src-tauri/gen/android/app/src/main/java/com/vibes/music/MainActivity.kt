@@ -4,6 +4,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.net.ConnectivityManager
+import android.net.Network
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -62,6 +64,36 @@ class MainActivity : TauriActivity() {
         } catch (t: Throwable) {
             android.util.Log.w("MainActivity", "permission error", t)
         }
+
+        setupNetworkMonitoring()
+    }
+
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+    private fun setupNetworkMonitoring() {
+        try {
+            val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                networkCallback = object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) {
+                        val webView = activeWebView?.get() ?: return
+                        webView.post {
+                            webView.evaluateJavascript("window.__onNetworkStateChange && window.__onNetworkStateChange(true);", null)
+                        }
+                    }
+
+                    override fun onLost(network: Network) {
+                        val webView = activeWebView?.get() ?: return
+                        webView.post {
+                            webView.evaluateJavascript("window.__onNetworkStateChange && window.__onNetworkStateChange(false);", null)
+                        }
+                    }
+                }
+                cm.registerDefaultNetworkCallback(networkCallback!!)
+            }
+        } catch (t: Throwable) {
+            android.util.Log.w("MainActivity", "network monitoring setup error", t)
+        }
     }
 
     override fun onWebViewCreate(webView: WebView) {
@@ -108,6 +140,12 @@ class MainActivity : TauriActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && networkCallback != null) {
+                val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+                cm?.unregisterNetworkCallback(networkCallback!!)
+            }
+        } catch (_: Exception) {}
         if (!MediaPlaybackService.isPlayingNow) {
             MediaPlaybackService.stopNotification(this)
         }
