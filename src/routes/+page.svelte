@@ -152,15 +152,17 @@
   <SongContextMenuModal />
 
   {#if navigationStore.showToast}
-    <div
-      class="fixed bottom-24 sm:bottom-28 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-2.5 rounded-full bg-neutral-900/95 text-white border border-white/10 text-xs font-medium shadow-[0_12px_36px_rgba(0,0,0,0.85)] backdrop-blur-xl pointer-events-none transition-all duration-200 anim-toast-up select-none tracking-wide"
-    >
-      {#if navigationStore.toastMessage.toLowerCase().includes('queue') || navigationStore.toastMessage.toLowerCase().includes('added') || navigationStore.toastMessage.toLowerCase().includes('playing')}
-        <svg class="w-3.5 h-3.5 text-accent stroke-current fill-none flex-shrink-0" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M20 6 9 17l-5-5"/>
-        </svg>
-      {/if}
-      <span>{navigationStore.toastMessage}</span>
+    <div class="fixed bottom-24 sm:bottom-28 inset-x-0 z-[100] flex justify-center pointer-events-none px-4 select-none">
+      <div
+        class="flex items-center gap-2 px-4 py-2.5 rounded-full bg-neutral-900/95 text-white border border-white/10 text-xs font-medium shadow-[0_12px_36px_rgba(0,0,0,0.85)] backdrop-blur-xl anim-toast-up tracking-wide whitespace-nowrap"
+      >
+        {#if navigationStore.toastMessage.toLowerCase().includes('queue') || navigationStore.toastMessage.toLowerCase().includes('added') || navigationStore.toastMessage.toLowerCase().includes('playing')}
+          <svg class="w-3.5 h-3.5 text-accent stroke-current fill-none flex-shrink-0" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 6 9 17l-5-5"/>
+          </svg>
+        {/if}
+        <span>{navigationStore.toastMessage}</span>
+      </div>
     </div>
   {/if}
 </div>
@@ -169,11 +171,11 @@
   @keyframes toastUp {
     from {
       opacity: 0;
-      transform: translate(-50%, 8px) scale(0.96);
+      transform: translateY(8px) scale(0.96);
     }
     to {
       opacity: 1;
-      transform: translate(-50%, 0) scale(1);
+      transform: translateY(0) scale(1);
     }
   }
   .anim-toast-up {
