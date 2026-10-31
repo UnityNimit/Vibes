@@ -232,6 +232,8 @@
     return 'Similar Vibes';
   });
 
+  let totalTracks = $derived(displayedSongs.length + player.userQueue.length);
+
   $effect(() => {
     if (player.currentContext.type === 'search' && player.currentSong?.id && player.similarSongs.length === 0) {
       player.loadSimilarQueue(player.currentSong.id);
@@ -714,7 +716,7 @@
           </div>
 
           <span class="text-xs font-mono text-neutral-500 pr-1 flex-shrink-0">
-            {displayedSongs.length} {displayedSongs.length === 1 ? 'track' : 'tracks'}
+            {totalTracks} {totalTracks === 1 ? 'track' : 'tracks'}
           </span>
         </div>
 
@@ -724,6 +726,51 @@
           onscroll={handleSimilarScroll}
           class="flex-1 overflow-y-auto px-3 py-2 flex flex-col gap-1.5 no-scrollbar"
         >
+          {#if player.userQueue.length > 0}
+            <!-- User Explicit Queue -->
+            {#each player.userQueue as song, qIdx}
+              <div
+                role="button"
+                tabindex="0"
+                data-song-id={song.id}
+                use:songContextMenu={song}
+                onclick={() => player.playFromUserQueue(qIdx)}
+                onkeydown={(e) => { if (e.key === 'Enter') player.playFromUserQueue(qIdx); }}
+                class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group hover:bg-white/[0.06] active:bg-white/10"
+              >
+                <div class="w-12 h-12 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
+                  <TrackImage src={song.thumb} songId={song.id} alt={song.title} class="w-full h-full object-cover" />
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h4 class="text-sm font-medium truncate text-white">
+                    {song.title}
+                  </h4>
+                  <p class="text-xs text-neutral-400 truncate mt-0.5">
+                    {song.artist}
+                  </p>
+                </div>
+                <!-- Minimal Remove Button -->
+                <button
+                  type="button"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    player.removeFromUserQueue(qIdx);
+                  }}
+                  class="w-8 h-8 rounded-full flex items-center justify-center text-neutral-500 hover:text-white active:scale-90 transition-all flex-shrink-0 cursor-pointer"
+                  title="Remove from queue"
+                  aria-label="Remove from queue"
+                >
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            {/each}
+
+            <!-- Minimalistic Line Separator -->
+            <div class="my-2 border-t border-white/10 w-full flex-shrink-0"></div>
+          {/if}
+
           {#if player.currentContext.type === 'search' && isLoadingSimilar}
             <div class="flex flex-col items-center justify-center py-24 gap-3 text-neutral-500">
               <div class="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
@@ -766,7 +813,7 @@
                 <div class="w-4 h-4 border-2 border-white/20 border-t-accent rounded-full animate-spin"></div>
               </div>
             {/if}
-          {:else}
+          {:else if player.userQueue.length === 0}
             <div class="py-20 text-center text-xs font-mono text-neutral-500">
               {player.currentContext.type === 'search' ? 'NO SIMILAR TRACKS FOUND' : 'NO TRACKS IN THIS CONTEXT'}
             </div>
@@ -1034,6 +1081,55 @@
           onscroll={handleSimilarScroll}
           class="flex-1 overflow-y-auto pr-1 flex flex-col gap-1 select-none border-none no-scrollbar smooth-scroll-container"
         >
+          {#if player.userQueue.length > 0}
+            <!-- User Explicit Queue -->
+            {#each player.userQueue as song, qIdx}
+              <div
+                role="button"
+                tabindex="0"
+                data-song-id={song.id}
+                use:songContextMenu={song}
+                onpointerenter={() => player.prefetchStream(song)}
+                onclick={() => player.playFromUserQueue(qIdx)}
+                onkeydown={(e) => { if (e.key === 'Enter') player.playFromUserQueue(qIdx); }}
+                class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group border-none hover:bg-white/[0.05]"
+              >
+                <div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
+                  <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" />
+                  <div class="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <svg class="w-4 h-4 fill-white" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                  </div>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <h4 class="text-xs sm:text-sm font-medium truncate text-white group-hover:text-neutral-200 transition-colors">
+                    {song.title}
+                  </h4>
+                  <p class="text-[11px] sm:text-xs text-neutral-400 truncate mt-0.5">
+                    {song.artist}
+                  </p>
+                </div>
+                <!-- Remove button on hover -->
+                <button
+                  type="button"
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    player.removeFromUserQueue(qIdx);
+                  }}
+                  class="w-7 h-7 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-white/10 flex items-center justify-center text-neutral-400 hover:text-white transition-all flex-shrink-0 cursor-pointer"
+                  title="Remove from queue"
+                  aria-label="Remove from queue"
+                >
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            {/each}
+
+            <!-- Minimalistic Line Separator -->
+            <div class="my-2 border-t border-white/10 w-full flex-shrink-0"></div>
+          {/if}
+
           {#if player.currentContext.type === 'search' && isLoadingSimilar}
             <div class="flex flex-col items-center justify-center py-24 gap-3 text-neutral-500">
               <div class="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin"></div>
@@ -1081,7 +1177,7 @@
                 <div class="w-4 h-4 border-2 border-white/20 border-t-accent rounded-full animate-spin"></div>
               </div>
             {/if}
-          {:else}
+          {:else if player.userQueue.length === 0}
             <div class="py-20 text-center text-xs font-mono text-neutral-500">
               {player.currentContext.type === 'search' ? 'NO SIMILAR TRACKS FOUND' : 'NO TRACKS IN THIS CONTEXT'}
             </div>

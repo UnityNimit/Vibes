@@ -153,9 +153,14 @@
 
   {#if navigationStore.showToast}
     <div
-      class="fixed bottom-24 sm:bottom-28 left-1/2 -translate-x-1/2 z-[100] px-4 py-2 rounded-full bg-neutral-900/95 text-white border border-white/10 text-xs font-medium shadow-[0_8px_32px_rgba(0,0,0,0.8)] backdrop-blur-xl pointer-events-none transition-all duration-200 anim-toast-up"
+      class="fixed bottom-24 sm:bottom-28 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-2 px-4 py-2.5 rounded-full bg-neutral-900/95 text-white border border-white/10 text-xs font-medium shadow-[0_12px_36px_rgba(0,0,0,0.85)] backdrop-blur-xl pointer-events-none transition-all duration-200 anim-toast-up select-none tracking-wide"
     >
-      {navigationStore.toastMessage}
+      {#if navigationStore.toastMessage.toLowerCase().includes('queue') || navigationStore.toastMessage.toLowerCase().includes('added') || navigationStore.toastMessage.toLowerCase().includes('playing')}
+        <svg class="w-3.5 h-3.5 text-accent stroke-current fill-none flex-shrink-0" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M20 6 9 17l-5-5"/>
+        </svg>
+      {/if}
+      <span>{navigationStore.toastMessage}</span>
     </div>
   {/if}
 </div>

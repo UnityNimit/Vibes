@@ -113,7 +113,7 @@
             </p>
           </div>
 
-          <!-- Quick Action Buttons -->
+          <!-- Quick Like Button -->
           <div class="flex items-center gap-1.5 flex-shrink-0">
             <button
               type="button"
@@ -124,18 +124,31 @@
             >
               <HeartIcon {isLiked} size={18} strokeWidth={2} />
             </button>
-            <button
-              type="button"
-              onclick={() => songContextMenuStore.playNext()}
-              class="w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/[0.12] active:scale-90 flex items-center justify-center text-neutral-400 hover:text-white transition-all cursor-pointer"
-              title="Play Next"
-              aria-label="Play Next"
-            >
-              <svg class="w-4 h-4 stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 6h10M4 12h10M4 18h6m8-6 4 4-4 4m4-4h-8"/>
-              </svg>
-            </button>
           </div>
+        </div>
+
+        <!-- Action Row: Add to Queue & Play Next -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <button
+            type="button"
+            onclick={() => songContextMenuStore.addToQueue()}
+            class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.1] active:scale-95 text-xs font-medium text-white transition-all cursor-pointer"
+          >
+            <svg class="w-4 h-4 text-accent stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 6h16M4 12h10M4 18h6m4-3v6m3-3h-6" />
+            </svg>
+            <span>Add to Queue</span>
+          </button>
+          <button
+            type="button"
+            onclick={() => songContextMenuStore.playNext()}
+            class="flex items-center justify-center gap-2 px-3 py-2.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.1] active:scale-95 text-xs font-medium text-white transition-all cursor-pointer"
+          >
+            <svg class="w-4 h-4 text-neutral-300 stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 6h10M4 12h10M4 18h6m8-6 4 4-4 4m4-4h-8"/>
+            </svg>
+            <span>Play Next</span>
+          </button>
         </div>
 
         <!-- Add to Playlist Header -->
@@ -265,19 +278,34 @@
             >
               <HeartIcon {isLiked} size={15} strokeWidth={2} />
             </button>
-            <button
-              type="button"
-              onclick={() => songContextMenuStore.playNext()}
-              class="w-7 h-7 rounded-lg hover:bg-white/[0.08] active:scale-95 flex items-center justify-center text-neutral-400 hover:text-white transition-colors cursor-pointer"
-              title="Play Next"
-              aria-label="Play Next"
-            >
-              <svg class="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M4 6h10M4 12h10M4 18h6m8-6 4 4-4 4m4-4h-8"/>
-              </svg>
-            </button>
           </div>
         </div>
+
+        <!-- Action Options: Add to Queue & Play Next -->
+        <div class="flex flex-col gap-0.5 pt-0.5">
+          <button
+            type="button"
+            onclick={() => songContextMenuStore.addToQueue()}
+            class="flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-xl hover:bg-white/[0.08] active:bg-white/[0.12] text-xs font-medium text-white transition-colors cursor-pointer group"
+          >
+            <svg class="w-3.5 h-3.5 text-accent stroke-current fill-none transition-transform group-hover:scale-105" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 6h16M4 12h10M4 18h6m4-3v6m3-3h-6" />
+            </svg>
+            <span>Add to Queue</span>
+          </button>
+          <button
+            type="button"
+            onclick={() => songContextMenuStore.playNext()}
+            class="flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded-xl hover:bg-white/[0.08] active:bg-white/[0.12] text-xs font-medium text-neutral-300 hover:text-white transition-colors cursor-pointer group"
+          >
+            <svg class="w-3.5 h-3.5 text-neutral-400 group-hover:text-white stroke-current fill-none transition-colors" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M4 6h10M4 12h10M4 18h6m8-6 4 4-4 4m4-4h-8"/>
+            </svg>
+            <span>Play Next</span>
+          </button>
+        </div>
+
+        <div class="border-t border-white/[0.08] my-0.5"></div>
 
         <!-- Section Title & Create Button -->
         <div class="flex items-center justify-between w-full">

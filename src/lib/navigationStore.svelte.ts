@@ -57,6 +57,18 @@ class NavigationStore {
   }
 
   /**
+   * Display a minimalistic bottom toast notification across the app.
+   */
+  showToastNotification(msg: string, durationMs = 2000) {
+    this.toastMessage = msg;
+    this.showToast = true;
+    if (this.toastTimeout) clearTimeout(this.toastTimeout);
+    this.toastTimeout = setTimeout(() => {
+      this.showToast = false;
+    }, durationMs);
+  }
+
+  /**
    * Record a tab transition in history.
    */
   recordTab(tab: string) {

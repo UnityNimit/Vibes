@@ -28,6 +28,8 @@ class PlayerState {
 
   queue = $state<Song[]>([]);
   queueIndex = $state<number>(-1);
+  userQueue = $state<Song[]>([]);
+  isUserQueuePlaying = $state<boolean>(false);
   repeatMode = $state<'off' | 'one' | 'shuffle'>('off');
 
   get isShuffle(): boolean {
@@ -166,7 +168,9 @@ class PlayerState {
       }
       this.syncMediaNotification('state');
       // Predictive prefetch of next track in queue for instant 0ms transition
-      if (this.queueIndex >= 0 && this.queueIndex + 1 < this.queue.length) {
+      if (this.userQueue.length > 0) {
+        this.prefetchStream(this.userQueue[0]);
+      } else if (this.queueIndex >= 0 && this.queueIndex + 1 < this.queue.length) {
         this.prefetchStream(this.queue[this.queueIndex + 1]);
       }
     });
@@ -427,7 +431,8 @@ class PlayerState {
     startIndex?: number,
     fromSync = false,
     syncStartPosition?: number,
-    autoPlay = true
+    autoPlay = true,
+    fromUserQueue = false
   ) {
     if (!fromSync && this.jamDelegate?.isGuest()) {
       const intercepted = this.jamDelegate.onUserPlay?.(
@@ -449,6 +454,7 @@ class PlayerState {
 
     // Update context & queue if explicitly provided
     if (context) {
+      this.isUserQueuePlaying = false;
       if (context.type === 'search') {
         // When played from search: Queue is seeded with current song and immediately populated with similar tracks!
         this.currentContext = {
@@ -478,7 +484,14 @@ class PlayerState {
       if (!fromSync) {
         this.jamDelegate?.onHostQueueChanged?.(this.queue, this.queueIndex);
       }
+    } else if (fromUserQueue) {
+      this.isUserQueuePlaying = true;
+      if (this.queue.length === 0) {
+        this.queue = [song];
+        this.queueIndex = 0;
+      }
     } else {
+      this.isUserQueuePlaying = false;
       // Retain current context & queue
       const existingIdx = this.queue.findIndex((s) => s.id === song.id);
       if (existingIdx !== -1) {
@@ -767,44 +780,51 @@ class PlayerState {
     }
   }
 
-  addToQueue(song: Song) {
+  addToUserQueue(song: Song) {
     if (this.jamDelegate?.isGuest()) {
       if (this.jamDelegate.onUserAddQueue?.(song)) return;
     }
-    const exists = this.queue.some((s) => s.id === song.id);
-    if (!exists) {
-      this.queue.push(song);
-      if (this.queue.length === 1 && !this.currentSong) {
-        this.play(song);
-      } else {
-        this.jamDelegate?.onHostQueueChanged?.(this.queue, this.queueIndex);
-      }
+    if (!this.currentSong) {
+      this.play(song);
+      return;
     }
+    this.userQueue.push(song);
+    this.prefetchStream(song);
+  }
+
+  addToQueue(song: Song) {
+    this.addToUserQueue(song);
   }
 
   playNext(song: Song) {
     if (this.jamDelegate?.isGuest()) {
       if (this.jamDelegate.onUserAddQueue?.(song)) return;
     }
-    if (!this.currentSong || this.queue.length === 0) {
+    if (!this.currentSong) {
       this.play(song);
       return;
     }
-    const existingIdx = this.queue.findIndex((s) => s.id === song.id);
-    if (existingIdx !== -1 && existingIdx > this.queueIndex) {
-      this.queue.splice(existingIdx, 1);
+    const existingIdx = this.userQueue.findIndex((s) => s.id === song.id);
+    if (existingIdx !== -1) {
+      this.userQueue.splice(existingIdx, 1);
     }
-    const insertIdx = this.queueIndex + 1;
-    this.queue.splice(insertIdx, 0, song);
-    if (this.currentContext.songs) {
-      const ctxIdx = this.currentContext.songs.findIndex((s) => s.id === song.id);
-      if (ctxIdx !== -1 && ctxIdx > this.queueIndex) {
-        this.currentContext.songs.splice(ctxIdx, 1);
-      }
-      this.currentContext.songs.splice(insertIdx, 0, song);
-    }
-    this.jamDelegate?.onHostQueueChanged?.(this.queue, this.queueIndex);
+    this.userQueue.unshift(song);
     this.prefetchStream(song);
+  }
+
+  removeFromUserQueue(index: number) {
+    if (index >= 0 && index < this.userQueue.length) {
+      this.userQueue.splice(index, 1);
+    }
+  }
+
+  playFromUserQueue(index: number) {
+    if (index >= 0 && index < this.userQueue.length) {
+      const song = this.userQueue.splice(index, 1)[0];
+      if (song) {
+        this.play(song, undefined, undefined, false, undefined, true, true);
+      }
+    }
   }
 
   setQueueFromSync(newQueue: Song[], newIndex: number) {
@@ -815,6 +835,15 @@ class PlayerState {
   async next() {
     if (this.jamDelegate?.isGuest()) {
       if (this.jamDelegate.onUserNext?.()) return;
+    }
+
+    // 1. If user has explicit queued songs, play the next one!
+    if (this.userQueue.length > 0) {
+      const nextSong = this.userQueue.shift();
+      if (nextSong) {
+        this.play(nextSong, undefined, undefined, false, undefined, true, true);
+        return;
+      }
     }
 
     // If playing from search and similar queue is still loading, await the initial recommendations
@@ -853,6 +882,15 @@ class PlayerState {
       if (this.jamDelegate.onUserPrev?.()) return;
     }
     if (this.currentTime > 3) {
+      this.seek(0);
+      return;
+    }
+    if (this.isUserQueuePlaying) {
+      this.isUserQueuePlaying = false;
+      if (this.queueIndex >= 0 && this.queueIndex < this.queue.length) {
+        this.play(this.queue[this.queueIndex]);
+        return;
+      }
       this.seek(0);
       return;
     }

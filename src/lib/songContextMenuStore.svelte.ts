@@ -1,6 +1,7 @@
 import { playlistStore } from './playlistStore.svelte';
 import { likedStore } from './likedStore.svelte';
 import { player } from './player.svelte';
+import { navigationStore } from './navigationStore.svelte';
 import type { Song } from './types';
 
 class SongContextMenuStore {
@@ -54,9 +55,17 @@ class SongContextMenuStore {
     }
   }
 
+  addToQueue() {
+    if (!this.song) return;
+    player.addToUserQueue(this.song);
+    navigationStore.showToastNotification('Added to queue');
+    this.close();
+  }
+
   playNext() {
     if (!this.song) return;
     player.playNext(this.song);
+    navigationStore.showToastNotification('Playing next');
     this.close();
   }
 
