@@ -1,1 +1,1 @@
-Blazing-fast, ad-free music player with offline caching & synced lyrics.
+Ad-free music player with real-time P2P Jamming, lyrics & offline caching.

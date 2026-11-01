@@ -1,7 +1,8 @@
 **Vibes** is a lightweight, ad-free music player inspired by ViMusic, engineered with Rust (Tauri v2) and Svelte 5 for silky-smooth performance and minimal battery drain.
 
-### 🌟 Key Features
+### Key Features
 
+- **Real-Time P2P Jam Sessions**: Listen along with friends in perfect sync using decentralized WebRTC peer-to-peer rooms. Share a room code to host or join a session, collaborate on the queue, and grant guest playback controls with zero central accounts required.
 - **Ad-Free Music Streaming**: Search and stream millions of tracks and albums directly from YouTube Music with zero commercial interruptions.
 - **Playlist Import**: Import any YouTube or Spotify playlist with one click.
 - **Automatic Offline Caching**: Streams audio while simultaneously caching chunks to local storage. Replaying your favorite songs requires 0 KB of mobile data and works fully offline.
