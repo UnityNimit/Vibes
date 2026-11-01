@@ -736,7 +736,8 @@
                 use:songContextMenu={song}
                 onclick={() => player.playFromUserQueue(qIdx)}
                 onkeydown={(e) => { if (e.key === 'Enter') player.playFromUserQueue(qIdx); }}
-                class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group hover:bg-white/[0.06] active:bg-white/10"
+                class="animate-pop-in flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group hover:bg-white/[0.06] active:bg-white/10"
+                style="--pop-index: {qIdx};"
               >
                 <div class="w-12 h-12 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
                   <TrackImage src={song.thumb} songId={song.id} alt={song.title} class="w-full h-full object-cover" />
@@ -786,7 +787,8 @@
                 use:songContextMenu={song}
                 onclick={() => playRightColumnSong(song, i)}
                 onkeydown={(e) => { if (e.key === 'Enter') playRightColumnSong(song, i); }}
-                class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group {isPlayingThis ? 'bg-accent/15' : 'active:bg-white/10'}"
+                class="animate-pop-in flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group {isPlayingThis ? 'bg-accent/15' : 'active:bg-white/10'}"
+                style="--pop-index: {i};"
               >
                 <div class="w-12 h-12 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
                   <TrackImage src={song.thumb} songId={song.id} alt={song.title} class="w-full h-full object-cover" />
@@ -1105,7 +1107,8 @@
                 onpointerenter={() => player.prefetchStream(song)}
                 onclick={() => player.playFromUserQueue(qIdx)}
                 onkeydown={(e) => { if (e.key === 'Enter') player.playFromUserQueue(qIdx); }}
-                class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group border-none hover:bg-white/[0.05]"
+                class="animate-pop-in flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group border-none hover:bg-white/[0.05]"
+                style="--pop-index: {qIdx};"
               >
                 <div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
                   <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" />
@@ -1159,7 +1162,8 @@
                 onpointerenter={() => player.prefetchStream(song)}
                 onclick={() => playRightColumnSong(song, i)}
                 onkeydown={(e) => { if (e.key === 'Enter') playRightColumnSong(song, i); }}
-                class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group border-none virtual-scroll-item {isPlayingThis ? 'bg-accent/15' : 'hover:bg-white/[0.05]'}"
+                class="animate-pop-in flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group border-none virtual-scroll-item {isPlayingThis ? 'bg-accent/15' : 'hover:bg-white/[0.05]'}"
+                style="--pop-index: {i};"
               >
                 <div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
                   <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" />

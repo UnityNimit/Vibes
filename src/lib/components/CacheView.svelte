@@ -125,7 +125,8 @@
             use:songContextMenu={toSong(item)}
             onclick={() => playCacheSong(item, i)}
             onkeydown={(e) => { if (e.key === 'Enter') playCacheSong(item, i); }}
-            class="flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === item.id ? 'bg-accent/15' : ''}"
+            class="animate-pop-in flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === item.id ? 'bg-accent/15' : ''}"
+            style="--pop-index: {i};"
           >
             <!-- Track: Thumbnail + Title & Artist -->
             <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -171,7 +172,8 @@
             use:songContextMenu={toSong(item)}
             onclick={() => playCacheSong(item, i)}
             onkeydown={(e) => { if (e.key === 'Enter') playCacheSong(item, i); }}
-            class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === item.id ? 'bg-accent/10' : ''}"
+            class="animate-pop-in grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === item.id ? 'bg-accent/10' : ''}"
+            style="--pop-index: {i};"
           >
             <!-- 1. Index or Pulse Equalizer -->
             <div class="text-xs text-neutral-500 group-hover:text-white font-mono flex items-center justify-center">

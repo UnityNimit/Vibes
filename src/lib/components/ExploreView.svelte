@@ -126,7 +126,8 @@
           onpointerenter={() => player.prefetchStream(song)}
           onclick={() => player.play(song, { type: 'search', title: `Explore: ${activeCategory}`, songs: trendingSongs }, i)}
           onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: `Explore: ${activeCategory}`, songs: trendingSongs }, i); }}
-          class="group bg-[#121214] hover:bg-[#1a1a1d] p-2.5 rounded-lg border border-white/5 cursor-pointer transition-colors flex flex-col gap-2.5 virtual-carousel-card"
+          class="animate-pop-in group bg-[#121214] hover:bg-[#1a1a1d] p-2.5 rounded-lg border border-white/5 cursor-pointer transition-colors flex flex-col gap-2.5 virtual-carousel-card"
+          style="--pop-index: {i};"
         >
           <!-- Thumbnail with Overlay Play Button -->
           <div class="relative w-full aspect-square rounded-lg bg-neutral-900 overflow-hidden flex-shrink-0">

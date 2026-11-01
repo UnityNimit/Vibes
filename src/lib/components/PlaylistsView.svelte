@@ -488,7 +488,8 @@
                 use:songContextMenu={song}
                 onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, selectedPlaylist.songs.findIndex(s => s.id === song.id))}
                 onkeydown={(e) => { if (e.key === 'Enter' && selectedPlaylist) playPlaylist(selectedPlaylist, selectedPlaylist.songs.findIndex(s => s.id === song.id)); }}
-                class="flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === song.id ? 'bg-accent/15' : ''}"
+                class="animate-pop-in flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === song.id ? 'bg-accent/15' : ''}"
+                style="--pop-index: {i};"
               >
                 <!-- Track: Thumbnail + Title & Artist -->
                 <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -537,7 +538,8 @@
                 use:songContextMenu={song}
                 onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, selectedPlaylist.songs.findIndex(s => s.id === song.id))}
                 onkeydown={(e) => { if (e.key === 'Enter' && selectedPlaylist) playPlaylist(selectedPlaylist, selectedPlaylist.songs.findIndex(s => s.id === song.id)); }}
-                class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
+                class="animate-pop-in grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
+                style="--pop-index: {i};"
               >
                 <!-- 1. Index or Pulse Equalizer -->
                 <div class="text-xs text-neutral-500 group-hover:text-white font-mono flex items-center justify-center">
@@ -680,14 +682,15 @@
     <!-- Grid Cards -->
     {#if playlistStore.playlists.length > 0}
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-        {#each playlistStore.playlists as pl}
+        {#each playlistStore.playlists as pl, i}
           <div
             role="button"
             tabindex="0"
             onclick={() => (playlistStore.selectedPlaylistId = pl.id)}
             onkeydown={(e) => { if (e.key === 'Enter') playlistStore.selectedPlaylistId = pl.id; }}
             oncontextmenu={(e) => handleCardContextMenu(e, pl)}
-            class="flex flex-col gap-2 p-2.5 rounded-2xl hover:bg-white/[0.04] transition-colors cursor-pointer group virtual-carousel-card relative"
+            class="animate-pop-in flex flex-col gap-2 p-2.5 rounded-2xl hover:bg-white/[0.04] transition-colors cursor-pointer group virtual-carousel-card relative"
+            style="--pop-index: {i};"
           >
             <!-- Card Cover Art -->
             <div class="aspect-square rounded-xl bg-neutral-900 overflow-hidden relative border border-white/5 shadow-md">
