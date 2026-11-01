@@ -3,6 +3,7 @@
   import { settings, THEMES } from '../settings.svelte';
   import { savedStore } from '../savedStore.svelte';
   import type { CacheStats } from '../types';
+  import SquishSwitch from './SquishSwitch.svelte';
 
   let stats = $state<CacheStats>({ total_songs: 0, total_size_mb: 0 });
   let isClearing = $state(false);
@@ -73,18 +74,17 @@
     <div class="py-2.5 min-h-10 flex items-center justify-between gap-6 w-full">
       <span class="text-sm font-medium text-white">Auto-Save Tracks</span>
 
-      <button
-        type="button"
-        role="switch"
-        aria-label="Toggle auto-save"
-        aria-checked={settings.autoSave}
-        onclick={() => settings.toggleAutoSave()}
-        class="w-8 h-4 rounded-full transition-all duration-200 relative flex-shrink-0 cursor-pointer p-0.5 flex items-center {settings.autoSave ? 'bg-accent/20 border border-accent/40' : 'bg-white/10 border border-white/10'}"
-      >
-        <span
-          class="w-3 h-3 rounded-full transition-transform duration-200 ease-out {settings.autoSave ? 'translate-x-4 bg-accent' : 'translate-x-0 bg-neutral-500'}"
-        ></span>
-      </button>
+      <SquishSwitch
+        checked={settings.autoSave}
+        onChange={(val) => settings.setAutoSave(val)}
+        ariaLabel="Toggle auto-save tracks"
+        width={50}
+        height={26}
+        radius={13}
+        speed={55}
+        stretch={40}
+        hoverScale={1.04}
+      />
     </div>
 
     <!-- Setting Row: Storage -->

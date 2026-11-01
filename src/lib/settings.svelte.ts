@@ -37,11 +37,15 @@ class SettingsState {
     }
   }
 
-  toggleAutoSave() {
-    this.autoSave = !this.autoSave;
+  setAutoSave(val: boolean) {
+    this.autoSave = val;
     if (typeof window !== 'undefined') {
       localStorage.setItem('vibes_auto_save', String(this.autoSave));
     }
+  }
+
+  toggleAutoSave() {
+    this.setAutoSave(!this.autoSave);
   }
 
   setAccentTheme(theme: AccentTheme) {
