@@ -7,6 +7,7 @@
   import { savedStore } from '../savedStore.svelte';
   import { formatBytes } from '../utils';
   import { songContextMenu } from '../songContextMenuStore.svelte';
+  import { popItem } from '../popAction';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import type { CacheItem, CacheStats, Song } from '../types';
@@ -116,17 +117,17 @@
       {/if}
 
       <!-- Result Rows -->
-      {#each cachedItems as item, i}
+      {#each cachedItems as item, i (item.id ?? i)}
         {#if isMobileView}
           <!-- Android Mobile Track Row: Pure Track (Art + Title/Artist) + Time + Delete Action -->
           <div
             role="button"
             tabindex="0"
             use:songContextMenu={toSong(item)}
+            use:popItem={i}
             onclick={() => playCacheSong(item, i)}
             onkeydown={(e) => { if (e.key === 'Enter') playCacheSong(item, i); }}
-            class="animate-pop-in flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === item.id ? 'bg-accent/15' : ''}"
-            style="--pop-index: {i};"
+            class="flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === item.id ? 'bg-accent/15' : ''}"
           >
             <!-- Track: Thumbnail + Title & Artist -->
             <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -170,10 +171,10 @@
             role="button"
             tabindex="0"
             use:songContextMenu={toSong(item)}
+            use:popItem={i}
             onclick={() => playCacheSong(item, i)}
             onkeydown={(e) => { if (e.key === 'Enter') playCacheSong(item, i); }}
-            class="animate-pop-in grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === item.id ? 'bg-accent/10' : ''}"
-            style="--pop-index: {i};"
+            class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === item.id ? 'bg-accent/10' : ''}"
           >
             <!-- 1. Index or Pulse Equalizer -->
             <div class="text-xs text-neutral-500 group-hover:text-white font-mono flex items-center justify-center">

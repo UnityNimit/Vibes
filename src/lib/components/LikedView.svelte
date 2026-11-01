@@ -6,6 +6,7 @@
   import { likedStore } from '../likedStore.svelte';
   import { formatSongSize } from '../utils';
   import { songContextMenu } from '../songContextMenuStore.svelte';
+  import { popItem } from '../popAction';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import type { Song } from '../types';
@@ -57,17 +58,17 @@
       {/if}
 
       <!-- Result Rows -->
-      {#each likedStore.songs as song, i}
+      {#each likedStore.songs as song, i (song.id ?? i)}
         {#if isMobileView}
           <!-- Android Mobile Track Row: Pure Track (Art + Title/Artist) + Time + Remove Action -->
           <div
             role="button"
             tabindex="0"
             use:songContextMenu={song}
+            use:popItem={i}
             onclick={() => player.play(song, { type: 'liked', title: 'Liked Songs', songs: likedStore.songs }, i)}
             onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'liked', title: 'Liked Songs', songs: likedStore.songs }, i); }}
-            class="animate-pop-in flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === song.id ? 'bg-accent/15' : ''}"
-            style="--pop-index: {i};"
+            class="flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === song.id ? 'bg-accent/15' : ''}"
           >
             <!-- Track: Thumbnail + Title & Artist -->
             <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -111,10 +112,10 @@
             role="button"
             tabindex="0"
             use:songContextMenu={song}
+            use:popItem={i}
             onclick={() => player.play(song, { type: 'liked', title: 'Liked Songs', songs: likedStore.songs }, i)}
             onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'liked', title: 'Liked Songs', songs: likedStore.songs }, i); }}
-            class="animate-pop-in grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
-            style="--pop-index: {i};"
+            class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
           >
             <!-- 1. Index or Pulse Equalizer -->
             <div class="text-xs text-neutral-500 group-hover:text-white font-mono flex items-center justify-center">

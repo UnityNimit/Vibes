@@ -9,6 +9,7 @@
   import { formatTime } from '../utils';
   import { navigationStore } from '../navigationStore.svelte';
   import { songContextMenu } from '../songContextMenuStore.svelte';
+  import { popItem } from '../popAction';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import RepeatIcon from './RepeatIcon.svelte';
@@ -728,16 +729,16 @@
         >
           {#if player.userQueue.length > 0}
             <!-- User Explicit Queue -->
-            {#each player.userQueue as song, qIdx}
+            {#each player.userQueue as song, qIdx (song.id ?? qIdx)}
               <div
                 role="button"
                 tabindex="0"
                 data-song-id={song.id}
                 use:songContextMenu={song}
+                use:popItem={qIdx}
                 onclick={() => player.playFromUserQueue(qIdx)}
                 onkeydown={(e) => { if (e.key === 'Enter') player.playFromUserQueue(qIdx); }}
-                class="animate-pop-in flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group hover:bg-white/[0.06] active:bg-white/10"
-                style="--pop-index: {qIdx};"
+                class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group hover:bg-white/[0.06] active:bg-white/10"
               >
                 <div class="w-12 h-12 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
                   <TrackImage src={song.thumb} songId={song.id} alt={song.title} class="w-full h-full object-cover" />
@@ -778,17 +779,17 @@
               <span class="text-xs font-mono tracking-wider">TUNING INTO SIMILAR VIBES...</span>
             </div>
           {:else if displayedSongs.length > 0}
-            {#each displayedSongs as song, i}
+            {#each displayedSongs as song, i (song.id ?? i)}
               {@const isPlayingThis = player.currentSong?.id === song.id}
               <div
                 role="button"
                 tabindex="0"
                 data-song-id={song.id}
                 use:songContextMenu={song}
+                use:popItem={i}
                 onclick={() => playRightColumnSong(song, i)}
                 onkeydown={(e) => { if (e.key === 'Enter') playRightColumnSong(song, i); }}
-                class="animate-pop-in flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group {isPlayingThis ? 'bg-accent/15' : 'active:bg-white/10'}"
-                style="--pop-index: {i};"
+                class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group {isPlayingThis ? 'bg-accent/15' : 'active:bg-white/10'}"
               >
                 <div class="w-12 h-12 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
                   <TrackImage src={song.thumb} songId={song.id} alt={song.title} class="w-full h-full object-cover" />
@@ -1098,17 +1099,17 @@
         >
           {#if player.userQueue.length > 0}
             <!-- User Explicit Queue -->
-            {#each player.userQueue as song, qIdx}
+            {#each player.userQueue as song, qIdx (song.id ?? qIdx)}
               <div
                 role="button"
                 tabindex="0"
                 data-song-id={song.id}
                 use:songContextMenu={song}
+                use:popItem={qIdx}
                 onpointerenter={() => player.prefetchStream(song)}
                 onclick={() => player.playFromUserQueue(qIdx)}
                 onkeydown={(e) => { if (e.key === 'Enter') player.playFromUserQueue(qIdx); }}
-                class="animate-pop-in flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group border-none hover:bg-white/[0.05]"
-                style="--pop-index: {qIdx};"
+                class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group border-none hover:bg-white/[0.05]"
               >
                 <div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
                   <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" />
@@ -1152,18 +1153,18 @@
               <span class="text-xs font-mono tracking-wider">TUNING INTO SIMILAR VIBES...</span>
             </div>
           {:else if displayedSongs.length > 0}
-            {#each displayedSongs as song, i}
+            {#each displayedSongs as song, i (song.id ?? i)}
               {@const isPlayingThis = player.currentSong?.id === song.id}
               <div
                 role="button"
                 tabindex="0"
                 data-song-id={song.id}
                 use:songContextMenu={song}
+                use:popItem={i}
                 onpointerenter={() => player.prefetchStream(song)}
                 onclick={() => playRightColumnSong(song, i)}
                 onkeydown={(e) => { if (e.key === 'Enter') playRightColumnSong(song, i); }}
-                class="animate-pop-in flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group border-none virtual-scroll-item {isPlayingThis ? 'bg-accent/15' : 'hover:bg-white/[0.05]'}"
-                style="--pop-index: {i};"
+                class="flex items-center gap-3.5 px-3 py-2.5 rounded-xl transition-colors cursor-pointer group border-none virtual-scroll-item {isPlayingThis ? 'bg-accent/15' : 'hover:bg-white/[0.05]'}"
               >
                 <div class="w-11 h-11 rounded-lg overflow-hidden bg-neutral-900 flex-shrink-0 relative">
                   <TrackImage src={song.thumb} alt={song.title} class="w-full h-full object-cover" />

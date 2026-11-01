@@ -2,6 +2,7 @@
   import { invoke } from '@tauri-apps/api/core';
   import { player } from '../player.svelte';
   import { songContextMenu } from '../songContextMenuStore.svelte';
+  import { popItem } from '../popAction';
   import { networkStore } from '../networkStore.svelte';
   import TrackImage from './TrackImage.svelte';
   import type { SearchPage, Song } from '../types';
@@ -118,16 +119,16 @@
     </div>
   {:else if trendingSongs.length > 0}
     <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-      {#each trendingSongs as song, i}
+      {#each trendingSongs as song, i (song.id ?? i)}
         <div
           role="button"
           tabindex="0"
           use:songContextMenu={song}
+          use:popItem={i}
           onpointerenter={() => player.prefetchStream(song)}
           onclick={() => player.play(song, { type: 'search', title: `Explore: ${activeCategory}`, songs: trendingSongs }, i)}
           onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: `Explore: ${activeCategory}`, songs: trendingSongs }, i); }}
-          class="animate-pop-in group bg-[#121214] hover:bg-[#1a1a1d] p-2.5 rounded-lg border border-white/5 cursor-pointer transition-colors flex flex-col gap-2.5 virtual-carousel-card"
-          style="--pop-index: {i};"
+          class="group bg-[#121214] hover:bg-[#1a1a1d] p-2.5 rounded-lg border border-white/5 cursor-pointer transition-colors flex flex-col gap-2.5 virtual-carousel-card"
         >
           <!-- Thumbnail with Overlay Play Button -->
           <div class="relative w-full aspect-square rounded-lg bg-neutral-900 overflow-hidden flex-shrink-0">

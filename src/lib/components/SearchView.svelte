@@ -9,6 +9,7 @@
   import { cleanArtistName, formatSongSize } from '../utils';
   import { navigationStore } from '../navigationStore.svelte';
   import { songContextMenu } from '../songContextMenuStore.svelte';
+  import { popItem } from '../popAction';
   import TrackImage from './TrackImage.svelte';
   import PlayingEqualizer from './PlayingEqualizer.svelte';
   import type { SearchPage, Song } from '../types';
@@ -246,11 +247,12 @@
     role="button"
     tabindex="0"
     use:songContextMenu={song}
+    use:popItem={index ?? 0}
     onpointerenter={() => player.prefetchStream(song)}
     onclick={() => handleCardClick(song, sectionTitle, songList, index)}
     onkeydown={(e) => { if (e.key === 'Enter') handleCardClick(song, sectionTitle, songList, index); }}
-    class="animate-pop-in group flex flex-col gap-2 cursor-pointer text-left w-36 sm:w-40 md:w-44 flex-shrink-0 select-none virtual-carousel-card"
-    style="touch-action: pan-x pan-y; --pop-index: {index ?? 0};"
+    class="group flex flex-col gap-2 cursor-pointer text-left w-36 sm:w-40 md:w-44 flex-shrink-0 select-none virtual-carousel-card"
+    style="touch-action: pan-x pan-y;"
   >
     <!-- Standalone Artwork Tile -->
     <div class="relative aspect-square w-full rounded-xl overflow-hidden bg-[#111114] shadow-md pointer-events-none flex-shrink-0">
@@ -399,18 +401,18 @@
       {/if}
 
       <!-- Result Rows -->
-      {#each results as song, i}
+      {#each results as song, i (song.id ?? i)}
         {#if isMobileView}
           <!-- Android Mobile Track Row: Pure Track (Art + Title/Artist) + Time (Duration / Equalizer) -->
           <div
             role="button"
             tabindex="0"
             use:songContextMenu={song}
+            use:popItem={i}
             onpointerenter={() => player.prefetchStream(song)}
             onclick={() => player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i)}
             onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i); }}
-            class="animate-pop-in flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === song.id ? 'bg-accent/15' : ''}"
-            style="--pop-index: {i};"
+            class="flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === song.id ? 'bg-accent/15' : ''}"
           >
             <!-- Track: Thumbnail + Title & Artist -->
             <div class="flex items-center gap-3 min-w-0 flex-1">
@@ -444,11 +446,11 @@
             role="button"
             tabindex="0"
             use:songContextMenu={song}
+            use:popItem={i}
             onpointerenter={() => player.prefetchStream(song)}
             onclick={() => player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i)}
             onkeydown={(e) => { if (e.key === 'Enter') player.play(song, { type: 'search', title: query ? `Search: "${query}"` : 'Search Results', songs: results }, i); }}
-            class="animate-pop-in grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
-            style="--pop-index: {i};"
+            class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
           >
             <!-- 1. Index or Pulse Equalizer -->
             <div class="text-xs text-neutral-500 group-hover:text-white font-mono flex items-center justify-center">
