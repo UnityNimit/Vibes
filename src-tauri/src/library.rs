@@ -86,6 +86,17 @@ pub fn create_playlist(name: String) -> Result<Playlist, String> {
     Ok(playlist)
 }
 
+pub fn add_playlist(mut playlist: Playlist) -> Result<Playlist, String> {
+    let mut playlists = get_playlists().unwrap_or_default();
+    if playlist.id.is_empty() || playlists.iter().any(|p| p.id == playlist.id) {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+        playlist.id = format!("pl_{}_{}", now, playlists.len() + 1);
+    }
+    playlists.insert(0, playlist.clone());
+    save_playlists(&playlists)?;
+    Ok(playlist)
+}
+
 pub fn delete_playlist(id: &str) -> Result<(), String> {
     let mut playlists = get_playlists().unwrap_or_default();
     playlists.retain(|p| p.id != id);

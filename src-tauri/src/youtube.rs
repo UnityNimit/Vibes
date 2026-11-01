@@ -1,10 +1,10 @@
-use crate::models::{SearchPage, Song};
+use crate::models::{Playlist, SearchPage, Song};
 use reqwest::header::{HeaderMap, HeaderValue, CONTENT_TYPE, USER_AGENT};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::process::Command;
 use std::sync::{LazyLock, RwLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 static STREAM_CACHE: LazyLock<RwLock<HashMap<String, (String, Instant)>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -196,6 +196,7 @@ fn optimize_thumbnail_url(raw_url: &str) -> String {
 fn parse_video_item(v: &Value) -> Option<Song> {
     let video_id = v
         .get("videoId")
+        .or_else(|| v.get("contentId"))
         .or_else(|| v.pointer("/itemPlayback/inlinePlayerData/onSelect/innertubeCommand/watchEndpoint/videoId"))
         .or_else(|| v.pointer("/rendererContext/commandContext/onTap/innertubeCommand/watchEndpoint/videoId"))
         .and_then(|id| id.as_str())?
@@ -1454,4 +1455,395 @@ pub async fn get_new_releases(country_code: Option<&str>) -> Result<Vec<Song>, S
     }
 
     Ok(songs)
+}
+
+
+enum PlaylistSource {
+    YouTube(String),
+    Spotify { id: String, is_album: bool },
+}
+
+fn parse_playlist_url(input: &str) -> Result<PlaylistSource, String> {
+    let raw = input.trim();
+    if raw.is_empty() {
+        return Err("Please enter a playlist URL or ID".to_string());
+    }
+
+    // 1. Spotify
+    if raw.contains("spotify.com") || raw.starts_with("spotify:") {
+        let is_album = raw.contains("/album/") || raw.starts_with("spotify:album:");
+        let parts: Vec<&str> = if raw.contains("/playlist/") {
+            raw.split("/playlist/").collect()
+        } else if raw.contains("/album/") {
+            raw.split("/album/").collect()
+        } else if raw.contains("spotify:playlist:") {
+            raw.split("spotify:playlist:").collect()
+        } else if raw.contains("spotify:album:") {
+            raw.split("spotify:album:").collect()
+        } else {
+            return Err("Unsupported Spotify link. Please provide a playlist or album link.".to_string());
+        };
+
+        if parts.len() < 2 {
+            return Err("Invalid Spotify URL format".to_string());
+        }
+
+        let after = parts[1];
+        let id: String = after.chars().take_while(|c| c.is_alphanumeric()).collect();
+        if id.is_empty() {
+            return Err("Could not extract Spotify playlist ID".to_string());
+        }
+
+        return Ok(PlaylistSource::Spotify { id, is_album });
+    }
+
+    // 2. YouTube list parameter: list=...
+    if let Some(pos) = raw.find("list=") {
+        let after = &raw[pos + 5..];
+        let id: String = after.chars().take_while(|c| *c != '&' && *c != '?' && *c != '#' && !c.is_whitespace()).collect();
+        if !id.is_empty() {
+            return Ok(PlaylistSource::YouTube(id));
+        }
+    }
+
+    // 3. Direct YouTube playlist ID (e.g. starts with PL, RD, OLAK5uy, VL, or UU)
+    if (raw.starts_with("PL") || raw.starts_with("RD") || raw.starts_with("OLAK5uy") || raw.starts_with("VL") || raw.starts_with("UU"))
+        && !raw.contains('/')
+        && !raw.contains('?')
+    {
+        return Ok(PlaylistSource::YouTube(raw.to_string()));
+    }
+
+    Err("Invalid URL. Please enter a valid YouTube or Spotify playlist link.".to_string())
+}
+
+fn extract_playlist_songs_recursive(val: &Value, songs: &mut Vec<Song>) {
+    if let Some(arr) = val.as_array() {
+        for item in arr {
+            extract_playlist_songs_recursive(item, songs);
+        }
+        return;
+    }
+
+    if let Some(obj) = val.as_object() {
+        if let Some(r) = obj.get("playlistVideoRenderer") {
+            if let Some(song) = parse_video_item(r) {
+                if !songs.iter().any(|s: &Song| s.id == song.id) {
+                    songs.push(song);
+                }
+            }
+            return;
+        }
+
+        if let Some(r) = obj.get("lockupViewModel") {
+            if let Some(song) = parse_video_item(r) {
+                if !songs.iter().any(|s: &Song| s.id == song.id) {
+                    songs.push(song);
+                }
+            }
+            return;
+        }
+
+        if let Some(r) = obj.get("videoRenderer").or_else(|| obj.get("compactVideoRenderer")) {
+            if let Some(song) = parse_video_item(r) {
+                if !songs.iter().any(|s: &Song| s.id == song.id) {
+                    songs.push(song);
+                }
+            }
+            return;
+        }
+
+        if let Some(r) = obj.get("musicResponsiveListItemRenderer") {
+            if let Some(song) = parse_music_responsive_list_item(r) {
+                if !songs.iter().any(|s: &Song| s.id == song.id) {
+                    songs.push(song);
+                }
+            }
+            return;
+        }
+
+        if let Some(r) = obj.get("musicTwoRowItemRenderer") {
+            if let Some(song) = parse_music_two_row_item(r) {
+                if !songs.iter().any(|s: &Song| s.id == song.id) {
+                    songs.push(song);
+                }
+            }
+            return;
+        }
+
+        for (_, child) in obj {
+            extract_playlist_songs_recursive(child, songs);
+        }
+    }
+}
+
+fn extract_continuation_token(val: &Value) -> Option<String> {
+    if let Some(token) = val
+        .pointer("/continuationItemViewModel/continuationCommand/innertubeCommand/continuationCommand/token")
+        .or_else(|| val.pointer("/continuationItemViewModel/continuationCommand/continuationCommand/token"))
+        .or_else(|| val.pointer("/continuationItemRenderer/continuationEndpoint/continuationCommand/token"))
+        .and_then(|t| t.as_str())
+    {
+        return Some(token.to_string());
+    }
+
+    if let Some(arr) = val.as_array() {
+        for it in arr {
+            if let Some(tok) = extract_continuation_token(it) {
+                return Some(tok);
+            }
+        }
+    } else if let Some(obj) = val.as_object() {
+        for (_, child) in obj {
+            if let Some(tok) = extract_continuation_token(child) {
+                return Some(tok);
+            }
+        }
+    }
+
+    None
+}
+
+pub async fn import_youtube_playlist(playlist_id: &str) -> Result<Playlist, String> {
+    let client = reqwest::Client::new();
+    let mut headers = HeaderMap::new();
+    headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    headers.insert(
+        USER_AGENT,
+        HeaderValue::from_static(
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        ),
+    );
+
+    let browse_id = if playlist_id.starts_with("VL") {
+        playlist_id.to_string()
+    } else {
+        format!("VL{}", playlist_id)
+    };
+
+    let payload = json!({
+        "context": {
+            "client": {
+                "clientName": "WEB",
+                "clientVersion": "2.20240101.01.00",
+                "hl": "en",
+                "gl": "US"
+            }
+        },
+        "browseId": browse_id
+    });
+
+    let resp = client
+        .post("https://www.youtube.com/youtubei/v1/browse")
+        .headers(headers.clone())
+        .json(&payload)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to reach YouTube: {}", e))?;
+
+    let json_data: Value = resp
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse YouTube playlist response: {}", e))?;
+
+    if let Some(alerts) = json_data.get("alerts").and_then(|a| a.as_array()) {
+        for alert in alerts {
+            if let Some(text) = alert.pointer("/alertRenderer/text/runs/0/text").and_then(|t| t.as_str()) {
+                if text.to_lowercase().contains("does not exist") || text.to_lowercase().contains("private") {
+                    return Err(text.to_string());
+                }
+            }
+        }
+    }
+
+    let playlist_name = json_data
+        .pointer("/metadata/playlistMetadataRenderer/title")
+        .or_else(|| json_data.pointer("/header/playlistHeaderRenderer/title/simpleText"))
+        .or_else(|| json_data.pointer("/header/playlistHeaderRenderer/title/runs/0/text"))
+        .or_else(|| json_data.pointer("/header/pageHeaderRenderer/pageTitle"))
+        .and_then(|t| t.as_str())
+        .unwrap_or("YouTube Playlist")
+        .trim()
+        .to_string();
+
+    let mut songs = Vec::new();
+    if let Some(contents) = json_data.get("contents") {
+        extract_playlist_songs_recursive(contents, &mut songs);
+    }
+
+    let mut current_token = extract_continuation_token(&json_data);
+    let mut pages = 0;
+    while let Some(tok) = current_token.take() {
+        pages += 1;
+        if pages > 3 || songs.len() >= 300 {
+            break;
+        }
+
+        let cont_payload = json!({
+            "context": {
+                "client": {
+                    "clientName": "WEB",
+                    "clientVersion": "2.20240101.01.00",
+                    "hl": "en",
+                    "gl": "US"
+                }
+            },
+            "continuation": tok
+        });
+
+        if let Ok(c_resp) = client
+            .post("https://www.youtube.com/youtubei/v1/browse")
+            .headers(headers.clone())
+            .json(&cont_payload)
+            .send()
+            .await
+        {
+            if let Ok(c_json) = c_resp.json::<Value>().await {
+                if let Some(actions) = c_json.get("onResponseReceivedActions") {
+                    extract_playlist_songs_recursive(actions, &mut songs);
+                }
+                current_token = extract_continuation_token(&c_json);
+            }
+        }
+    }
+
+    if songs.is_empty() {
+        return Err("No playable tracks found in this YouTube playlist.".to_string());
+    }
+
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let pl_id = format!("pl_yt_{}_{}", now, songs.len());
+
+    let playlist = Playlist {
+        id: pl_id,
+        name: playlist_name,
+        created_at: now,
+        songs,
+    };
+
+    crate::library::add_playlist(playlist)
+}
+
+pub async fn import_spotify_playlist(spotify_id: &str, is_album: bool) -> Result<Playlist, String> {
+    let client = reqwest::Client::new();
+    let entity_type = if is_album { "album" } else { "playlist" };
+    let embed_url = format!("https://open.spotify.com/embed/{}/{}", entity_type, spotify_id);
+
+    let resp = client
+        .get(&embed_url)
+        .header(
+            USER_AGENT,
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        )
+        .send()
+        .await
+        .map_err(|e| format!("Failed to reach Spotify embed: {}", e))?;
+
+    if !resp.status().is_success() {
+        return Err(format!("Spotify returned status {}", resp.status()));
+    }
+
+    let html = resp.text().await.map_err(|e| format!("Failed to read Spotify response: {}", e))?;
+
+    let script_start = html.find("<script id=\"__NEXT_DATA__\"")
+        .or_else(|| html.find("<script id='__NEXT_DATA__'"));
+    let script_start_idx = script_start.ok_or_else(|| "Could not locate Spotify playlist data in page".to_string())?;
+
+    let tag_close = html[script_start_idx..].find('>').ok_or_else(|| "Malformed Spotify page".to_string())?;
+    let content_start = script_start_idx + tag_close + 1;
+    let content_end = html[content_start..].find("</script>").ok_or_else(|| "Malformed Spotify script tag".to_string())?;
+    let json_text = &html[content_start..content_start + content_end];
+
+    let next_data: Value = serde_json::from_str(json_text)
+        .map_err(|e| format!("Failed to parse Spotify metadata: {}", e))?;
+
+    let entity = next_data
+        .pointer("/props/pageProps/state/data/entity")
+        .or_else(|| next_data.pointer("/props/pageProps/entity"))
+        .ok_or_else(|| "Spotify playlist entity not found in response".to_string())?;
+
+    let pl_name = entity
+        .get("name")
+        .or_else(|| entity.get("title"))
+        .and_then(|n| n.as_str())
+        .unwrap_or("Spotify Playlist")
+        .trim()
+        .to_string();
+
+    let track_list = entity
+        .get("trackList")
+        .or_else(|| entity.pointer("/tracks/items"))
+        .and_then(|t| t.as_array())
+        .ok_or_else(|| "No tracks found in Spotify playlist".to_string())?;
+
+    if track_list.is_empty() {
+        return Err("Spotify playlist contains 0 tracks".to_string());
+    }
+
+    let max_tracks = track_list.len().min(100);
+    let mut track_queries = Vec::new();
+    for i in 0..max_tracks {
+        let t = &track_list[i];
+        let title = t.get("title").or_else(|| t.get("name")).and_then(|v| v.as_str()).unwrap_or("").trim();
+        let subtitle = t.get("subtitle").or_else(|| t.pointer("/artists/0/name")).and_then(|v| v.as_str()).unwrap_or("").trim();
+        if !title.is_empty() {
+            let q = if subtitle.is_empty() {
+                title.to_string()
+            } else {
+                format!("{} {}", title, subtitle)
+            };
+            track_queries.push(q);
+        }
+    }
+
+    if track_queries.is_empty() {
+        return Err("Could not extract any valid track titles from Spotify playlist".to_string());
+    }
+
+    let mut resolved_songs = Vec::new();
+    let chunk_size = 6;
+    for chunk in track_queries.chunks(chunk_size) {
+        let mut handles = Vec::new();
+        for q in chunk {
+            let query = q.clone();
+            handles.push(tokio::spawn(async move {
+                match search_songs(&query).await {
+                    Ok(page) => page.songs.into_iter().next(),
+                    Err(_) => None,
+                }
+            }));
+        }
+
+        for handle in handles {
+            if let Ok(Some(song)) = handle.await {
+                if !resolved_songs.iter().any(|s: &Song| s.id == song.id) {
+                    resolved_songs.push(song);
+                }
+            }
+        }
+    }
+
+    if resolved_songs.is_empty() {
+        return Err("Could not match any Spotify tracks to playable audio".to_string());
+    }
+
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_secs();
+    let pl_id = format!("pl_sp_{}_{}", now, resolved_songs.len());
+
+    let playlist = Playlist {
+        id: pl_id,
+        name: pl_name,
+        created_at: now,
+        songs: resolved_songs,
+    };
+
+    crate::library::add_playlist(playlist)
+}
+
+pub async fn import_external_playlist(url: String) -> Result<Playlist, String> {
+    let source = parse_playlist_url(&url)?;
+    match source {
+        PlaylistSource::YouTube(id) => import_youtube_playlist(&id).await,
+        PlaylistSource::Spotify { id, is_album } => import_spotify_playlist(&id, is_album).await,
+    }
 }

@@ -246,6 +246,11 @@ fn remove_from_playlist(playlist_id: String, song_id: String) -> Result<(), Stri
 }
 
 #[tauri::command]
+async fn import_external_playlist(url: String) -> Result<Playlist, String> {
+    youtube::import_external_playlist(url).await
+}
+
+#[tauri::command]
 async fn get_song_lyrics(title: String, artist: String, duration_secs: Option<u64>) -> Result<LyricsResult, String> {
     fetch_lyrics(&title, &artist, duration_secs).await
 }
@@ -340,6 +345,7 @@ pub fn run() {
             rename_playlist,
             toggle_in_playlist,
             remove_from_playlist,
+            import_external_playlist,
             get_song_lyrics,
             minimize_window,
             toggle_maximize_window,

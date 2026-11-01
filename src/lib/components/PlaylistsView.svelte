@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { invoke } from '@tauri-apps/api/core';
   import { isMobile } from '../platform';
   import { playlistStore } from '../playlistStore.svelte';
   import { player } from '../player.svelte';
@@ -21,6 +22,25 @@
   let renameInputEl = $state<HTMLInputElement | null>(null);
   let isMobileView = $state(isMobile());
 
+  // Universal Playlist Import Modal State
+  let showImportModal = $state<boolean>(false);
+  let importUrl = $state<string>('');
+  let isImporting = $state<boolean>(false);
+  let importError = $state<string | null>(null);
+  let importInputEl = $state<HTMLInputElement | null>(null);
+
+  // In-Playlist Real-Time Search Filter
+  let filterQuery = $state<string>('');
+
+  // 1-Click "Cache All / Download All" Offline State
+  let isCachingAll = $state<boolean>(false);
+  let cachingProgress = $state<{ current: number; total: number }>({ current: 0, total: 0 });
+
+  // Playlist Card Desktop Context Menu State
+  let contextPlaylist = $state<Playlist | null>(null);
+  let contextMenuPos = $state<{ x: number; y: number }>({ x: 0, y: 0 });
+  let isContextOpen = $state<boolean>(false);
+
   onMount(() => {
     isMobileView = isMobile();
   });
@@ -28,6 +48,52 @@
   let selectedPlaylist = $derived<Playlist | null>(
     playlistStore.playlists.find((p) => p.id === playlistStore.selectedPlaylistId) ?? null
   );
+
+  let filteredSongs = $derived.by<Song[]>(() => {
+    if (!selectedPlaylist) return [];
+    const q = filterQuery.trim().toLowerCase();
+    if (!q) return selectedPlaylist.songs;
+    return selectedPlaylist.songs.filter(
+      (s) =>
+        s.title.toLowerCase().includes(q) ||
+        s.artist.toLowerCase().includes(q) ||
+        s.album.toLowerCase().includes(q)
+    );
+  });
+
+  let cachedSongsCount = $derived(
+    selectedPlaylist
+      ? selectedPlaylist.songs.filter((s) => savedStore.isSaved(s.id)).length
+      : 0
+  );
+
+  let isAllCached = $derived(
+    selectedPlaylist &&
+      selectedPlaylist.songs.length > 0 &&
+      cachedSongsCount === selectedPlaylist.songs.length
+  );
+
+  $effect(() => {
+    if (showImportModal) {
+      return navigationStore.register('pl_import_modal', 70, () => {
+        if (!isImporting) {
+          showImportModal = false;
+          importError = null;
+        }
+        return true;
+      });
+    }
+  });
+
+  $effect(() => {
+    if (isContextOpen) {
+      return navigationStore.register('pl_card_context', 55, () => {
+        isContextOpen = false;
+        contextPlaylist = null;
+        return true;
+      });
+    }
+  });
 
   $effect(() => {
     if (isCreating) {
@@ -52,6 +118,7 @@
       return navigationStore.register('pl_detail', 20, () => {
         playlistStore.selectedPlaylistId = null;
         isRenaming = false;
+        filterQuery = '';
         return true;
       });
     }
@@ -76,6 +143,35 @@
     newName = '';
     if (pl) {
       playlistStore.selectedPlaylistId = pl.id;
+    }
+  }
+
+  function openImportModal() {
+    showImportModal = true;
+    importUrl = '';
+    importError = null;
+    isImporting = false;
+    requestAnimationFrame(() => {
+      importInputEl?.focus();
+    });
+  }
+
+  async function handleImportSubmit() {
+    const trimmed = importUrl.trim();
+    if (!trimmed || isImporting) return;
+    isImporting = true;
+    importError = null;
+    try {
+      const pl = await playlistStore.importFromUrl(trimmed);
+      if (pl) {
+        showImportModal = false;
+        importUrl = '';
+        playlistStore.selectedPlaylistId = pl.id;
+      }
+    } catch (e: any) {
+      importError = typeof e === 'string' ? e : e?.message || 'Failed to import playlist. Please check the URL and try again.';
+    } finally {
+      isImporting = false;
     }
   }
 
@@ -124,6 +220,65 @@
     );
   }
 
+  async function cacheAllPlaylistSongs(targetPl?: Playlist) {
+    const pl = targetPl || selectedPlaylist;
+    if (!pl || pl.songs.length === 0 || isCachingAll) return;
+    const uncachedSongs = pl.songs.filter((s) => !savedStore.isSaved(s.id));
+    if (uncachedSongs.length === 0) {
+      navigationStore.showToastNotification('All tracks are already downloaded');
+      return;
+    }
+
+    isCachingAll = true;
+    cachingProgress = { current: 0, total: uncachedSongs.length };
+
+    let successCount = 0;
+    for (let i = 0; i < uncachedSongs.length; i++) {
+      const s = uncachedSongs[i];
+      try {
+        await invoke('download_song', { song: s });
+        successCount++;
+      } catch (e) {
+        console.error('Failed to download song:', s.title, e);
+      }
+      cachingProgress = { current: i + 1, total: uncachedSongs.length };
+    }
+
+    isCachingAll = false;
+    navigationStore.showToastNotification(
+      `Downloaded ${successCount} ${successCount === 1 ? 'track' : 'tracks'} for offline playback`
+    );
+    await savedStore.refresh();
+  }
+
+  function handleCardContextMenu(e: MouseEvent, pl: Playlist) {
+    e.preventDefault();
+    e.stopPropagation();
+    contextPlaylist = pl;
+
+    const menuWidth = 200;
+    const menuHeight = 220;
+    const maxX = Math.max(12, (window.innerWidth || 800) - menuWidth - 16);
+    const maxY = Math.max(12, (window.innerHeight || 600) - menuHeight - 16);
+
+    contextMenuPos = {
+      x: Math.min(Math.max(12, e.clientX), maxX),
+      y: Math.min(Math.max(12, e.clientY), maxY)
+    };
+    isContextOpen = true;
+  }
+
+  function handleCardRenameFromContext(pl: Playlist) {
+    isContextOpen = false;
+    playlistStore.selectedPlaylistId = pl.id;
+    startRename();
+  }
+
+  async function handleCardDeleteFromContext(pl: Playlist) {
+    isContextOpen = false;
+    await playlistStore.delete(pl.id);
+  }
+
   function computeTotalDuration(songs: Song[]): string {
     let totalSecs = 0;
     for (const s of songs) {
@@ -151,7 +306,7 @@
       <!-- Back Navigation Bar -->
       <div class="flex items-center justify-between min-h-10 w-full">
         <button
-          onclick={() => { playlistStore.selectedPlaylistId = null; isRenaming = false; }}
+          onclick={() => { playlistStore.selectedPlaylistId = null; isRenaming = false; filterQuery = ''; }}
           class="flex items-center gap-2 text-xs text-neutral-400 hover:text-white transition-colors cursor-pointer"
         >
           <BackIcon size={16} strokeWidth={2.2} direction="left" />
@@ -221,12 +376,12 @@
             </p>
           </div>
 
-          <!-- Play / Shuffle Controls -->
+          <!-- Play / Shuffle / Cache All Controls -->
           {#if selectedPlaylist.songs.length > 0}
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-3 flex-wrap">
               <button
                 onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, 0)}
-                class="px-5 py-2 rounded-full bg-accent text-accent-contrast text-xs font-medium flex items-center gap-2 cursor-pointer hover:opacity-90 transition-opacity"
+                class="px-5 py-2 rounded-full bg-accent text-accent-contrast text-xs font-medium flex items-center gap-2 cursor-pointer hover:opacity-90 active:scale-95 transition-all shadow-md"
               >
                 <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
                   <path d="M8 5v14l11-7z" />
@@ -236,11 +391,11 @@
 
               <button
                 onclick={() => selectedPlaylist && shufflePlaylist(selectedPlaylist)}
-                class="p-2 rounded-full text-neutral-400 hover:text-white transition-colors cursor-pointer"
+                class="p-2 rounded-full text-neutral-400 hover:text-white transition-colors cursor-pointer hover:bg-white/[0.06] active:scale-95"
                 title="Shuffle playlist"
                 aria-label="Shuffle playlist"
               >
-                <svg class="w-6 h-6 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <svg class="w-5 h-5 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                   <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/>
                   <path d="m18 2 4 4-4 4"/>
                   <path d="M2 6h1.4c1.3 0 2.5.6 3.3 1.7l2.8 4"/>
@@ -248,14 +403,69 @@
                   <path d="m18 14 4 4-4 4"/>
                 </svg>
               </button>
+
+              <!-- 1-Click "Cache All / Download All" Offline Button -->
+              {#if isAllCached}
+                <div class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent/10 border border-accent/25 text-accent text-xs font-mono select-none" title="All tracks are downloaded offline">
+                  <svg class="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 6 9 17l-5-5"/>
+                  </svg>
+                  <span>Cached</span>
+                </div>
+              {:else if isCachingAll}
+                <div class="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/[0.08] border border-white/15 text-white text-xs font-mono select-none animate-pulse">
+                  <svg class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                  </svg>
+                  <span>Downloading ({cachingProgress.current}/{cachingProgress.total})</span>
+                </div>
+              {:else}
+                <button
+                  onclick={() => cacheAllPlaylistSongs()}
+                  class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white/[0.06] hover:bg-white/[0.12] active:scale-95 text-xs text-neutral-300 hover:text-white transition-all cursor-pointer font-sans"
+                  title="Download all tracks for offline playback"
+                >
+                  <svg class="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  <span>Download All</span>
+                </button>
+              {/if}
             </div>
           {/if}
         </div>
       </div>
 
+      <!-- In-Playlist Real-Time Search Filter Bar -->
+      {#if selectedPlaylist.songs.length > 3}
+        <div class="relative w-full max-w-sm mt-1">
+          <svg class="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 stroke-current fill-none pointer-events-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <path d="m21 21-4.3-4.3"></path>
+          </svg>
+          <input
+            bind:value={filterQuery}
+            placeholder="Search in playlist..."
+            class="w-full bg-white/[0.05] hover:bg-white/[0.08] focus:bg-white/[0.08] border border-white/10 focus:border-white/25 rounded-xl pl-9 pr-8 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none transition-colors font-sans"
+          />
+          {#if filterQuery}
+            <button
+              onclick={() => (filterQuery = '')}
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-white text-xs cursor-pointer p-0.5"
+              title="Clear search"
+            >
+              ✕
+            </button>
+          {/if}
+        </div>
+      {/if}
+
       <!-- Songs Table (Matching Liked & Saved views) -->
-      {#if selectedPlaylist.songs.length > 0}
-        <div class="flex flex-col gap-1 w-full mt-2">
+      {#if filteredSongs.length > 0}
+        <div class="flex flex-col gap-1 w-full mt-1">
           {#if !isMobileView}
             <!-- Desktop Grid Column Header -->
             <div class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 pb-2 text-xs text-neutral-500 font-mono w-full select-none">
@@ -269,15 +479,15 @@
           {/if}
 
           <!-- Result Rows -->
-          {#each selectedPlaylist.songs as song, i}
+          {#each filteredSongs as song, i}
             {#if isMobileView}
               <!-- Android Mobile Track Row: Pure Track (Art + Title/Artist) + Time + Remove Action -->
               <div
                 role="button"
                 tabindex="0"
                 use:songContextMenu={song}
-                onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, i)}
-                onkeydown={(e) => { if (e.key === 'Enter' && selectedPlaylist) playPlaylist(selectedPlaylist, i); }}
+                onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, selectedPlaylist.songs.findIndex(s => s.id === song.id))}
+                onkeydown={(e) => { if (e.key === 'Enter' && selectedPlaylist) playPlaylist(selectedPlaylist, selectedPlaylist.songs.findIndex(s => s.id === song.id)); }}
                 class="flex items-center justify-between gap-3 px-2.5 py-2.5 rounded-xl transition-colors cursor-pointer w-full group active:bg-white/[0.08] {player.currentSong?.id === song.id ? 'bg-accent/15' : ''}"
               >
                 <!-- Track: Thumbnail + Title & Artist -->
@@ -320,13 +530,13 @@
                 </div>
               </div>
             {:else}
-              <!-- Desktop Grid Row (Unchanged) -->
+              <!-- Desktop Grid Row -->
               <div
                 role="button"
                 tabindex="0"
                 use:songContextMenu={song}
-                onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, i)}
-                onkeydown={(e) => { if (e.key === 'Enter' && selectedPlaylist) playPlaylist(selectedPlaylist, i); }}
+                onclick={() => selectedPlaylist && playPlaylist(selectedPlaylist, selectedPlaylist.songs.findIndex(s => s.id === song.id))}
+                onkeydown={(e) => { if (e.key === 'Enter' && selectedPlaylist) playPlaylist(selectedPlaylist, selectedPlaylist.songs.findIndex(s => s.id === song.id)); }}
                 class="grid grid-cols-[32px_minmax(180px,1.6fr)_80px_minmax(140px,1.2fr)_64px_36px] items-center gap-4 px-3 py-2 rounded-xl hover:bg-white/[0.04] cursor-pointer transition-colors w-full group virtual-scroll-item {player.currentSong?.id === song.id ? 'bg-accent/10' : ''}"
               >
                 <!-- 1. Index or Pulse Equalizer -->
@@ -388,6 +598,16 @@
             {/if}
           {/each}
         </div>
+      {:else if filterQuery}
+        <div class="flex flex-col items-center justify-center py-16 text-center gap-2">
+          <p class="text-xs font-mono text-neutral-500 tracking-wider">NO TRACKS MATCHING "{filterQuery}"</p>
+          <button
+            onclick={() => (filterQuery = '')}
+            class="text-xs text-accent hover:underline cursor-pointer"
+          >
+            Clear filter
+          </button>
+        </div>
       {:else}
         <div class="flex flex-col items-center justify-center py-24 text-center">
           <p class="text-xs font-mono text-neutral-500 tracking-wider">EMPTY PLAYLIST</p>
@@ -401,15 +621,31 @@
         {playlistStore.playlists.length} {playlistStore.playlists.length === 1 ? 'playlist' : 'playlists'}
       </p>
 
-      {#if !isCreating}
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Import Playlist Button -->
         <button
-          onclick={startCreate}
-          class="text-xs font-mono text-neutral-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5"
+          onclick={openImportModal}
+          class="text-xs font-mono text-neutral-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/5 active:scale-95"
+          title="Import YouTube or Spotify playlist link"
         >
-          <span>+</span>
-          <span>NEW PLAYLIST</span>
+          <svg class="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>IMPORT</span>
         </button>
-      {/if}
+
+        {#if !isCreating}
+          <button
+            onclick={startCreate}
+            class="text-xs font-mono text-neutral-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/[0.05] hover:bg-white/[0.09] border border-white/5 active:scale-95"
+          >
+            <span>+</span>
+            <span>NEW PLAYLIST</span>
+          </button>
+        {/if}
+      </div>
     </div>
 
     <!-- Inline Creator Bar if active -->
@@ -450,7 +686,8 @@
             tabindex="0"
             onclick={() => (playlistStore.selectedPlaylistId = pl.id)}
             onkeydown={(e) => { if (e.key === 'Enter') playlistStore.selectedPlaylistId = pl.id; }}
-            class="flex flex-col gap-2 p-2.5 rounded-2xl hover:bg-white/[0.04] transition-colors cursor-pointer group virtual-carousel-card"
+            oncontextmenu={(e) => handleCardContextMenu(e, pl)}
+            class="flex flex-col gap-2 p-2.5 rounded-2xl hover:bg-white/[0.04] transition-colors cursor-pointer group virtual-carousel-card relative"
           >
             <!-- Card Cover Art -->
             <div class="aspect-square rounded-xl bg-neutral-900 overflow-hidden relative border border-white/5 shadow-md">
@@ -501,14 +738,229 @@
       </div>
     {:else if !isCreating}
       <div class="flex flex-col items-center justify-center py-28 text-center gap-3">
-        <p class="text-xs font-mono text-neutral-500 tracking-wider">NO PLAYLISTS CREATED</p>
-        <button
-          onclick={startCreate}
-          class="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/10 text-xs font-mono text-neutral-300 hover:text-white transition-colors cursor-pointer"
-        >
-          CREATE FIRST PLAYLIST
-        </button>
+        <p class="text-xs font-mono text-neutral-500 tracking-wider">NO PLAYLISTS YET</p>
+        <div class="flex items-center gap-3">
+          <button
+            onclick={startCreate}
+            class="px-4 py-2 rounded-xl bg-white/[0.06] hover:bg-white/10 text-xs font-mono text-neutral-300 hover:text-white transition-colors cursor-pointer"
+          >
+            CREATE FIRST PLAYLIST
+          </button>
+          <button
+            onclick={openImportModal}
+            class="px-4 py-2 rounded-xl bg-accent text-accent-contrast text-xs font-mono font-medium hover:opacity-90 transition-opacity cursor-pointer flex items-center gap-1.5"
+          >
+            <span>IMPORT LINK</span>
+          </button>
+        </div>
       </div>
     {/if}
   {/if}
 </div>
+
+<!-- Desktop Right-Click Context Menu on Playlist Cards -->
+{#if isContextOpen && contextPlaylist}
+  <div
+    class="fixed inset-0 z-50 bg-transparent"
+    onclick={() => { isContextOpen = false; contextPlaylist = null; }}
+    oncontextmenu={(e) => { e.preventDefault(); isContextOpen = false; contextPlaylist = null; }}
+    role="presentation"
+  >
+    <div
+      class="fixed z-50 w-52 bg-neutral-900/95 border border-white/10 rounded-2xl p-1.5 shadow-2xl backdrop-blur-xl flex flex-col gap-0.5 text-xs select-none anim-menu-pop font-sans"
+      style="left: {contextMenuPos.x}px; top: {contextMenuPos.y}px;"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+      role="menu"
+      tabindex="-1"
+    >
+      <div class="px-3 py-2 border-b border-white/[0.08] mb-1">
+        <p class="font-medium text-white truncate">{contextPlaylist.name}</p>
+        <p class="text-[10px] text-neutral-500 font-mono">{contextPlaylist.songs.length} {contextPlaylist.songs.length === 1 ? 'track' : 'tracks'}</p>
+      </div>
+
+      {#if contextPlaylist.songs.length > 0}
+        <button
+          onclick={() => { const pl = contextPlaylist; isContextOpen = false; if (pl) playPlaylist(pl, 0); }}
+          class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-neutral-300 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer text-left w-full"
+        >
+          <svg class="w-3.5 h-3.5 fill-current text-accent" viewBox="0 0 24 24">
+            <path d="M8 5v14l11-7z" />
+          </svg>
+          <span>Play</span>
+        </button>
+
+        <button
+          onclick={() => { const pl = contextPlaylist; isContextOpen = false; if (pl) shufflePlaylist(pl); }}
+          class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-neutral-300 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer text-left w-full"
+        >
+          <svg class="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/>
+            <path d="m18 2 4 4-4 4"/>
+            <path d="M2 6h1.4c1.3 0 2.5.6 3.3 1.7l2.8 4"/>
+            <path d="m15.5 13.7 1.3 1.8c.7 1.1 2 1.7 3.3 1.7H22"/>
+            <path d="m18 14 4 4-4 4"/>
+          </svg>
+          <span>Shuffle</span>
+        </button>
+
+        <button
+          onclick={() => { const pl = contextPlaylist; isContextOpen = false; if (pl) cacheAllPlaylistSongs(pl); }}
+          class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-neutral-300 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer text-left w-full"
+        >
+          <svg class="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          <span>Download All</span>
+        </button>
+
+        <div class="h-px bg-white/[0.06] my-0.5"></div>
+      {/if}
+
+      <button
+        onclick={() => contextPlaylist && handleCardRenameFromContext(contextPlaylist)}
+        class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-neutral-300 hover:text-white hover:bg-white/[0.08] transition-colors cursor-pointer text-left w-full"
+      >
+        <svg class="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 20h9"/>
+          <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+        </svg>
+        <span>Rename</span>
+      </button>
+
+      <button
+        onclick={() => contextPlaylist && handleCardDeleteFromContext(contextPlaylist)}
+        class="flex items-center gap-2.5 px-3 py-2 rounded-xl text-red-400 hover:text-red-300 hover:bg-red-500/10 transition-colors cursor-pointer text-left w-full"
+      >
+        <svg class="w-3.5 h-3.5 stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18"/>
+          <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
+          <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        </svg>
+        <span>Delete</span>
+      </button>
+    </div>
+  </div>
+{/if}
+
+<!-- Universal Playlist Importer Modal (YouTube & Spotify) -->
+{#if showImportModal}
+  <div
+    class="fixed inset-0 z-[100] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+    onclick={() => { if (!isImporting) { showImportModal = false; importError = null; } }}
+    role="presentation"
+  >
+    <div
+      class="w-full max-w-md bg-neutral-950 border border-white/10 rounded-2xl p-5 sm:p-6 shadow-2xl flex flex-col gap-4 text-white font-sans anim-modal-scale"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+      role="dialog"
+      aria-modal="true"
+      tabindex="-1"
+    >
+      <div class="flex items-center justify-between pb-2 border-b border-white/[0.08]">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-accent/15 text-accent flex items-center justify-center">
+            <svg class="w-4 h-4 stroke-current fill-none" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+          </div>
+          <div>
+            <h2 class="text-sm font-semibold text-white">Import Playlist</h2>
+            <p class="text-[11px] text-neutral-400">YouTube, YouTube Music, or Spotify</p>
+          </div>
+        </div>
+        {#if !isImporting}
+          <button
+            onclick={() => { showImportModal = false; importError = null; }}
+            class="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-white/[0.06] transition-colors cursor-pointer text-sm"
+          >
+            ✕
+          </button>
+        {/if}
+      </div>
+
+      <p class="text-xs text-neutral-400 leading-relaxed">
+        Paste any public or unlisted YouTube playlist or Spotify playlist/album link. All tracks will be instantly imported into your library.
+      </p>
+
+      <form onsubmit={(e) => { e.preventDefault(); handleImportSubmit(); }} class="flex flex-col gap-3">
+        <div class="flex flex-col gap-1.5">
+          <input
+            bind:this={importInputEl}
+            bind:value={importUrl}
+            disabled={isImporting}
+            placeholder="https://open.spotify.com/playlist/... or youtube.com/playlist?list=..."
+            class="w-full bg-white/[0.06] border border-white/15 focus:border-accent rounded-xl px-3.5 py-2.5 text-xs text-white placeholder-neutral-500 focus:outline-none transition-colors font-sans disabled:opacity-50"
+          />
+        </div>
+
+        {#if importError}
+          <div class="p-2.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs text-red-400 leading-normal">
+            {importError}
+          </div>
+        {/if}
+
+        <div class="flex items-center justify-end gap-2.5 pt-2">
+          {#if !isImporting}
+            <button
+              type="button"
+              onclick={() => { showImportModal = false; importError = null; }}
+              class="px-4 py-2 rounded-xl text-xs text-neutral-400 hover:text-white hover:bg-white/[0.06] transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+          {/if}
+          <button
+            type="submit"
+            disabled={!importUrl.trim() || isImporting}
+            class="px-5 py-2 rounded-xl bg-accent text-accent-contrast text-xs font-semibold hover:opacity-90 active:scale-95 transition-all cursor-pointer disabled:opacity-30 disabled:pointer-events-none flex items-center gap-2 shadow-lg"
+          >
+            {#if isImporting}
+              <svg class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+              </svg>
+              <span>Importing & Resolving...</span>
+            {:else}
+              <span>Import Playlist</span>
+            {/if}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+{/if}
+
+<style>
+  @keyframes menuPop {
+    from {
+      opacity: 0;
+      transform: scale(0.95) translateY(-4px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+  .anim-menu-pop {
+    animation: menuPop 0.12s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+  @keyframes modalScale {
+    from {
+      opacity: 0;
+      transform: scale(0.96) translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+  }
+  .anim-modal-scale {
+    animation: modalScale 0.16s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+</style>

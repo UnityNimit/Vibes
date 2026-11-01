@@ -1,4 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
+import { navigationStore } from './navigationStore.svelte';
 import type { Playlist, Song } from './types';
 
 class PlaylistStore {
@@ -35,6 +36,7 @@ class PlaylistStore {
     try {
       const pl = await invoke<Playlist>('create_playlist', { name: clean });
       await this.refresh();
+      navigationStore.showToastNotification(`Created playlist "${clean}"`);
       return pl;
     } catch (e) {
       console.error('Failed to create playlist:', e);
@@ -42,10 +44,30 @@ class PlaylistStore {
     }
   }
 
+  async importFromUrl(url: string): Promise<Playlist | null> {
+    const clean = url.trim();
+    if (!clean) return null;
+    this.isLoading = true;
+    try {
+      const pl = await invoke<Playlist>('import_external_playlist', { url: clean });
+      await this.refresh();
+      navigationStore.showToastNotification(`Imported "${pl.name}" (${pl.songs.length} tracks)`);
+      return pl;
+    } catch (e: any) {
+      console.error('Failed to import playlist:', e);
+      throw e;
+    } finally {
+      this.isLoading = false;
+    }
+  }
+
   async delete(id: string) {
     try {
+      const pl = this.playlists.find((p) => p.id === id);
+      const plName = pl?.name ?? 'playlist';
       await invoke('delete_playlist', { id });
       await this.refresh();
+      navigationStore.showToastNotification(`Deleted "${plName}"`);
     } catch (e) {
       console.error('Failed to delete playlist:', e);
     }
@@ -57,6 +79,7 @@ class PlaylistStore {
     try {
       await invoke('rename_playlist', { id, name: clean });
       await this.refresh();
+      navigationStore.showToastNotification(`Renamed to "${clean}"`);
     } catch (e) {
       console.error('Failed to rename playlist:', e);
     }
@@ -64,8 +87,11 @@ class PlaylistStore {
 
   async toggleSong(playlistId: string, song: Song): Promise<boolean> {
     try {
+      const pl = this.playlists.find((p) => p.id === playlistId);
+      const plName = pl?.name ?? 'playlist';
       const added = await invoke<boolean>('toggle_in_playlist', { playlistId, song });
       await this.refresh();
+      navigationStore.showToastNotification(added ? `Added to "${plName}"` : `Removed from "${plName}"`);
       return added;
     } catch (e) {
       console.error('Failed to toggle song in playlist:', e);
@@ -75,8 +101,11 @@ class PlaylistStore {
 
   async removeSong(playlistId: string, songId: string) {
     try {
+      const pl = this.playlists.find((p) => p.id === playlistId);
+      const plName = pl?.name ?? 'playlist';
       await invoke('remove_from_playlist', { playlistId, songId });
       await this.refresh();
+      navigationStore.showToastNotification(`Removed from "${plName}"`);
     } catch (e) {
       console.error('Failed to remove song from playlist:', e);
     }
