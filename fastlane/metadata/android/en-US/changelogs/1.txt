@@ -1,0 +1,7 @@
+Initial release v1.0.0:
+- Stream any track from YouTube Music ad-free
+- Instant YouTube and Spotify playlist import
+- Dual-pipe automatic offline caching
+- Synchronized karaoke lyrics with LRCLIB
+- Background playback and lockscreen media notifications
+- Zero telemetry and 100% libre open-source code

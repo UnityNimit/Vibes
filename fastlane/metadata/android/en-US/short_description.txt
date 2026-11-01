@@ -1,0 +1,1 @@
+Blazing-fast, ad-free music player with offline caching & synced lyrics.
