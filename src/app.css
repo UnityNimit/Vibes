@@ -243,7 +243,7 @@ input[type="range"]::-webkit-slider-thumb {
 @keyframes list-pop-in {
   0% {
     opacity: 0;
-    transform: translate3d(0, 14px, 0) scale(0.82);
+    transform: translate3d(0, 10px, 0) scale(0.88);
   }
   100% {
     opacity: 1;
@@ -257,13 +257,13 @@ input[type="range"]::-webkit-slider-thumb {
 
 .pop-item.pop-pending {
   opacity: 0;
-  transform: translate3d(0, 14px, 0) scale(0.82);
+  transform: translate3d(0, 10px, 0) scale(0.88);
   pointer-events: none;
 }
 
 .animate-pop-in,
 .pop-item.animate-pop-in {
-  animation: list-pop-in 480ms var(--spring-ease) both;
+  animation: list-pop-in 420ms var(--spring-ease) both;
   animation-delay: var(--pop-delay, 0s);
   pointer-events: auto;
 }
