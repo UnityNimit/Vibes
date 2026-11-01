@@ -1,62 +1,75 @@
-# 🎵 Vibes - Cross-Platform YouTube Music Client
+# Vibes
 
-A blazing-fast, lightweight, ad-free music player inspired by **ViMusic**, built with **Tauri v2 (Rust)** and **Svelte 5** for Android, Windows, macOS, Linux, and iOS.
+An open-source, ad-free music client inspired by ViMusic. Built with Tauri v2 (Rust) and Svelte 5 to run natively across Android, Windows, macOS, Linux, and iOS while using around 40-50 MB of RAM.
 
----
+<p align="center">
+  <img src="assets/desktop-ui.jpeg" alt="Vibes Desktop UI" width="67%" />
+  <img src="assets/mobile-ui.jpeg" alt="Vibes Mobile UI" width="30%" />
+</p>
 
-## 📥 Downloads (Release v1.0.0)
+## Highlights
 
-| Platform | Download Link | Alternative | Notes |
+- Ad-free streaming: Clean audio playback from YouTube Music with lockscreen and background controls.
+- Automatic offline cache: Streams and saves audio chunks locally simultaneously. Replaying songs uses 0 KB of network data and works offline without manual downloads.
+- Real-time P2P Jam sessions: Group listening rooms synced over WebRTC. Share a room code to listen together in sync with guest queue controls and no accounts required.
+- Playlist import: One-click import for public YouTube and Spotify playlist URLs.
+- Synced karaoke lyrics: Real-time scrolling lyrics powered by LRCLIB with tap-to-seek.
+- Lightweight: Native Rust backend paired with Svelte 5 runes. No Electron bloat.
+- Privacy first: Zero trackers, zero ads, zero telemetry, and no Google Play Services requirements.
+
+## Downloads (Release v1.0.0)
+
+| Platform | Direct Download | Alternative | Architecture / Notes |
 | :--- | :--- | :--- | :--- |
-| **Android** | [Vibes.apk (29.7 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.apk) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.apk) | Universal Multi-Arch APK (`arm64`, `armv7`, `x86_64`, `x86`), 16 KB page-aligned, Release signed |
-| **Windows Portable** | [Vibes.exe (6.3 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.exe) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.exe) | Standalone portable executable |
-| **Windows Installer** | [Vibes_1.0.0_x64-setup.exe (2.3 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes_1.0.0_x64-setup.exe) | [MSI Package (3.1 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes_1.0.0_x64_en-US.msi) | Setup installer / enterprise MSI |
-| **macOS Universal** | [Vibes.dmg (5.9 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.dmg) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.dmg) | Apple Silicon (M1/M2/M3/M4) & Intel x86_64 |
-| **Linux AppImage** | [Vibes.AppImage (78.4 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.AppImage) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.AppImage) | Universal Linux package |
-| **Linux Debian / Ubuntu** | [Vibes.deb (3.5 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.deb) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.deb) | .deb Package |
-| **iOS** | [Vibes.ipa (2.5 MB)](https://github.com/UnityNimit/Vibes/releases/latest/download/Vibes.ipa) | [v1.0.0 Direct](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.ipa) | Sideloadable via AltStore / Sideloadly / TrollStore |
+| Android | [Vibes.apk](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.apk) | [Latest Release](https://github.com/UnityNimit/Vibes/releases/latest) | Universal APK (arm64, armv7, x86_64, x86), 16 KB page-aligned |
+| Windows Portable | [Vibes.exe](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.exe) | [Latest Release](https://github.com/UnityNimit/Vibes/releases/latest) | Standalone portable executable |
+| Windows Installer | [Vibes-setup.exe](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes_1.0.0_x64-setup.exe) | [MSI Package](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes_1.0.0_x64_en-US.msi) | Setup wizard installer or enterprise MSI |
+| macOS Universal | [Vibes.dmg](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.dmg) | [Latest Release](https://github.com/UnityNimit/Vibes/releases/latest) | Universal binary (Apple Silicon M-series and Intel x86_64) |
+| Linux AppImage | [Vibes.AppImage](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.AppImage) | [Latest Release](https://github.com/UnityNimit/Vibes/releases/latest) | Standalone Linux executable |
+| Linux Debian / Ubuntu | [Vibes.deb](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.deb) | [Latest Release](https://github.com/UnityNimit/Vibes/releases/latest) | Debian package installer |
+| iOS | [Vibes.ipa](https://github.com/UnityNimit/Vibes/releases/download/v1.0.0/Vibes.ipa) | [Latest Release](https://github.com/UnityNimit/Vibes/releases/latest) | Sideloadable via AltStore, SideStore, or TrollStore |
 
----
+## Keyboard Shortcuts
 
-## ⚡ The 4 Core Pillars
+- Space: Play / Pause
+- ArrowLeft / ArrowRight: Seek backward / forward 5 seconds
+- Ctrl + ArrowLeft / Ctrl + ArrowRight: Previous / Next track in queue
+- L: Toggle synchronized karaoke lyrics
 
-| # | Requirement | Implementation |
-|---|---|---|
-| **1** | **All Music from YouTube** | Direct YouTube Music (InnerTube) search, suggestions, and audio streaming with zero ad interruptions. |
-| **2** | **No Lags** | Svelte 5 fine-grained runes reactivity (`$state`, `$derived`, `$effect`) with zero virtual DOM overhead + asynchronous Rust audio stream piping. |
-| **3** | **Super Lightweight** | Native Windows WebView2 runtime backed by Rust. Consumes ~40–50 MB RAM (vs 400MB+ on Electron). Fast cold startup. |
-| **4** | **Offline Automatic Cache Save** | Dual-pipe streaming engine: as a song plays, chunks stream to your speakers and save silently to `%APPDATA%/Vibes/cache/<videoId>.m4a`. Replaying songs uses **0 KB network data** and works 100% offline. |
+## Building From Source
 
----
+Prerequisites: Node.js 20+, Rust toolchain, and platform build tools (Visual Studio C++ on Windows, Xcode on macOS, or build-essential on Linux).
 
-## 🚀 Features
-
-- **Left Sidebar Hub:** Minimalist layout featuring instant Search, Liked Songs library, and an Offline Cache management hub with live disk space tracking.
-- **Integrated Sidebar Player:** ViMusic-style audio player right in the sidebar with scrubber, volume, loop/repeat, and shuffle.
-- **Synchronized Karaoke Lyrics:** Timed LRC karaoke lyrics that scroll automatically with playback (powered by LRCLIB). Click any line to seek directly to that moment.
-- **Offline Cache Manager:** Shows total disk space cached, track counts, play-offline button, and individual track deletion.
-- **Keyboard Shortcuts:**
-  - `Space`: Play / Pause
-  - `ArrowLeft` / `ArrowRight`: Skip backward / forward 5 seconds
-  - `Ctrl + ArrowLeft` / `Ctrl + ArrowRight`: Previous / Next track in queue
-  - `L`: Toggle Synced Karaoke Lyrics
-
----
-
-## 🛠️ Development & Running
-
-### Prerequisites
-- [Node.js](https://nodejs.org/) (v20+)
-- [Rust & Cargo](https://rustup.rs/) (MSVC toolchain)
-- Python with `yt-dlp` installed (`pip install yt-dlp`)
-
-### Start in Development Mode
 ```bash
+# 1. Clone the repository
+git clone https://github.com/UnityNimit/Vibes.git
+cd Vibes
+
+# 2. Install dependencies
+npm install
+
+# 3. Run development mode
 npm run tauri dev
-```
 
-### Build Production Release Binary
-```bash
+# 4. Build standalone production binary
 npm run tauri build
 ```
-The compiled standalone `.exe` will be generated in `src-tauri/target/release/`.
+
+For Android APK builds:
+```bash
+npx tauri android build --apk
+```
+
+## Star History
+
+<a href="https://star-history.com/#UnityNimit/Vibes&Date">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=UnityNimit/Vibes&type=Date&theme=dark" />
+    <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=UnityNimit/Vibes&type=Date" />
+    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=UnityNimit/Vibes&type=Date" />
+  </picture>
+</a>
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
