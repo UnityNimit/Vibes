@@ -1,13 +1,17 @@
 /**
  * React Bits Animated List Pop-In Animation Action (Dynamic Scroll & Initial Stagger)
  *
- * Implements spring-physics pop-in when items enter view:
- * 1. Initial mount: Staggered cascade wave for elements in viewport (35ms delay per item, capped at 350ms).
+ * Implements glitch-free spring-physics pop-in when items enter view:
+ * 1. Initial mount: Staggered cascade wave for elements in viewport (35ms delay per item, capped at 280ms).
  * 2. Dynamic scroll: Offscreen items wait in `pop-pending`, then pop in with spring physics
- *    as the user scrolls down (or up), even when already pre-loaded into memory/DOM.
- * 3. Hysteresis: Elements only reset to `pop-pending` when safely offscreen (> 80px),
- *    preventing edge flickering or jitter during minor scrolling.
- * 4. Cleanup: Releases GPU compositing layer memory on animationend.
+ *    as the user scrolls down (or up) with ZERO delay (0s).
+ * 3. Fast-scroll perfection:
+ *    - 80px rootMargin pre-triggers items before they cross the visible boundary, eliminating blank gaps.
+ *    - Fast fling optimization: items that completely flew past the viewport are settled immediately
+ *      without spinning up unneeded animations.
+ *    - Once an item has popped in, it is unobserved and stays settled forever, preventing offscreen
+ *      disappearing/re-popping glitches.
+ * 4. Unified single keyframe: avoids dual-animationend premature cutoff.
  */
 
 function getScrollParent(node: HTMLElement): HTMLElement | null {
@@ -22,77 +26,70 @@ function getScrollParent(node: HTMLElement): HTMLElement | null {
   return null;
 }
 
-// Global batch tracker for micro-staggering burst arrivals
-let batchTime = 0;
-let batchIndex = 0;
+function isInitiallyVisible(node: HTMLElement, scrollParent: HTMLElement | null): boolean {
+  const rect = node.getBoundingClientRect();
+  if (rect.width === 0 && rect.height === 0) return false;
 
-// Singleton IntersectionObserver
+  const vh = window.innerHeight || 800;
+  const vw = window.innerWidth || 1200;
+  const bounds = scrollParent
+    ? scrollParent.getBoundingClientRect()
+    : { top: 0, bottom: vh, left: 0, right: vw };
+
+  return (
+    rect.top < bounds.bottom &&
+    rect.bottom > bounds.top &&
+    rect.left < bounds.right &&
+    rect.right > bounds.left
+  );
+}
+
+// Singleton IntersectionObserver with 80px anticipatory trigger margin
 let sharedObserver: IntersectionObserver | null = null;
-const nodeData = new WeakMap<HTMLElement, { index: number; scrollParent: HTMLElement | null }>();
 
 function getObserver(): IntersectionObserver {
   if (!sharedObserver) {
-    sharedObserver = new IntersectionObserver((entries) => {
-      const now = performance.now();
-      if (now - batchTime > 250) {
-        batchTime = now;
-        batchIndex = 0;
-      }
+    sharedObserver = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            const target = entry.target as HTMLElement;
+            const scrollParent = getScrollParent(target);
+            const bounds = scrollParent
+              ? scrollParent.getBoundingClientRect()
+              : { top: 0, bottom: window.innerHeight || 800 };
 
-      for (const entry of entries) {
-        const target = entry.target as HTMLElement;
-        const data = nodeData.get(target);
-        const scrollParent = data?.scrollParent ?? getScrollParent(target);
+            const rect = entry.boundingClientRect;
 
-        if (entry.isIntersecting) {
-          // Trigger pop animation if currently pending or not animating
-          if (target.classList.contains('pop-pending') || !target.classList.contains('animate-pop-in')) {
+            // If an item already flew completely past the top during high-speed fling:
+            if (rect.bottom < bounds.top) {
+              target.classList.remove('pop-pending');
+              sharedObserver?.unobserve(target);
+              continue;
+            }
+
+            // Normal or fast scroll entry: pop in immediately with 0s delay
             target.classList.remove('pop-pending');
-
-            // Stagger delay if part of a simultaneous batch, otherwise instant (0s)
-            const delay = Math.min(batchIndex * 0.035, 0.35);
-            batchIndex++;
-
-            target.style.setProperty('--pop-delay', `${delay.toFixed(3)}s`);
+            target.style.setProperty('--pop-delay', '0s');
             target.classList.add('animate-pop-in');
-            target.style.willChange = 'transform, opacity';
+            sharedObserver?.unobserve(target);
 
-            const onEnd = () => {
-              target.removeEventListener('animationend', onEnd);
-              target.classList.remove('animate-pop-in');
-              target.style.willChange = 'auto';
-            };
-            target.addEventListener('animationend', onEnd, { once: true });
-          }
-        } else {
-          // Offscreen check with 80px hysteresis deadband
-          const rect = entry.boundingClientRect;
-          const bounds = scrollParent
-            ? scrollParent.getBoundingClientRect()
-            : {
-                top: 0,
-                bottom: window.innerHeight || 800,
-                left: 0,
-                right: window.innerWidth || 1200
-              };
-
-          const isFarOffscreen =
-            rect.bottom < bounds.top - 80 ||
-            rect.top > bounds.bottom + 80 ||
-            rect.right < bounds.left - 80 ||
-            rect.left > bounds.right + 80;
-
-          if (isFarOffscreen) {
-            target.classList.remove('animate-pop-in');
-            target.classList.add('pop-pending');
-            target.style.willChange = 'auto';
+            target.addEventListener(
+              'animationend',
+              () => {
+                target.classList.remove('animate-pop-in');
+              },
+              { once: true }
+            );
           }
         }
+      },
+      {
+        root: null,
+        rootMargin: '80px',
+        threshold: 0
       }
-    }, {
-      root: null,
-      threshold: 0
-    });
+    );
   }
   return sharedObserver;
 }
@@ -100,55 +97,30 @@ function getObserver(): IntersectionObserver {
 export function popItem(node: HTMLElement, index = 0) {
   node.classList.add('pop-item');
   const scrollParent = getScrollParent(node);
-  nodeData.set(node, { index, scrollParent });
 
   // Check if initially visible in viewport
-  const rect = node.getBoundingClientRect();
-  const vh = window.innerHeight || 800;
-  const vw = window.innerWidth || 1200;
-  const bounds = scrollParent
-    ? scrollParent.getBoundingClientRect()
-    : { top: 0, bottom: vh, left: 0, right: vw };
-
-  const isInitiallyVisible =
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.top < bounds.bottom &&
-    rect.bottom > bounds.top &&
-    rect.left < bounds.right &&
-    rect.right > bounds.left;
-
-  if (isInitiallyVisible) {
-    // Initial mount cascade wave
-    const delay = Math.min(index * 0.035, 0.35);
+  if (isInitiallyVisible(node, scrollParent)) {
+    // Initial mount cascade wave: 35ms stagger, capped at 280ms
+    const delay = Math.min(index * 0.035, 0.28);
     node.style.setProperty('--pop-delay', `${delay.toFixed(3)}s`);
     node.classList.add('animate-pop-in');
-    node.style.willChange = 'transform, opacity';
 
-    const onEnd = () => {
-      node.removeEventListener('animationend', onEnd);
-      node.classList.remove('animate-pop-in');
-      node.style.willChange = 'auto';
-    };
-    node.addEventListener('animationend', onEnd, { once: true });
+    node.addEventListener(
+      'animationend',
+      () => {
+        node.classList.remove('animate-pop-in');
+      },
+      { once: true }
+    );
   } else {
     // Offscreen item waiting for scroll entry
     node.classList.add('pop-pending');
+    getObserver().observe(node);
   }
 
-  // Observe for scroll transitions
-  getObserver().observe(node);
-
   return {
-    update(newIndex = 0) {
-      const data = nodeData.get(node);
-      if (data) {
-        data.index = newIndex;
-      }
-    },
     destroy() {
       sharedObserver?.unobserve(node);
-      nodeData.delete(node);
     }
   };
 }
