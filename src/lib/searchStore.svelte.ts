@@ -14,6 +14,8 @@ class SearchStore {
 
   // High-performance in-memory search query LRU cache (0ms instant repeat searches)
   private queryCache = new Map<string, { page: SearchPage; timestamp: number }>();
+  private pendingSearches = new Map<string, Promise<SearchPage>>();
+  private prefetchTimer: ReturnType<typeof setTimeout> | null = null;
 
   // Horizontal scroll offsets for explore carousels
   carouselScrolls = $state<{
@@ -39,7 +41,55 @@ class SearchStore {
     }
   }
 
+  onQueryInput(val: string) {
+    this.query = val;
+    if (this.prefetchTimer) {
+      clearTimeout(this.prefetchTimer);
+      this.prefetchTimer = null;
+    }
+    const trimmed = val.trim();
+    if (trimmed.length >= 2) {
+      this.prefetchTimer = setTimeout(() => {
+        this.prefetch(trimmed);
+      }, 260);
+    }
+  }
+
+  prefetch(queryToPrefetch: string) {
+    const q = queryToPrefetch.trim();
+    if (!q) return;
+    const cacheKey = q.toLowerCase();
+    const cached = this.queryCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000) {
+      return;
+    }
+    if (this.pendingSearches.has(cacheKey)) {
+      return;
+    }
+
+    const p = invoke<SearchPage>('search_music', { query: q })
+      .then((page) => {
+        if (this.queryCache.size >= 50) {
+          const oldestKey = this.queryCache.keys().next().value;
+          if (oldestKey) this.queryCache.delete(oldestKey);
+        }
+        this.queryCache.set(cacheKey, { page, timestamp: Date.now() });
+        this.pendingSearches.delete(cacheKey);
+        return page;
+      })
+      .catch((e) => {
+        this.pendingSearches.delete(cacheKey);
+        throw e;
+      });
+
+    this.pendingSearches.set(cacheKey, p);
+  }
+
   async search(searchQuery?: string) {
+    if (this.prefetchTimer) {
+      clearTimeout(this.prefetchTimer);
+      this.prefetchTimer = null;
+    }
     const q = (searchQuery ?? this.query).trim();
     if (!q) return;
     this.query = q;
@@ -62,17 +112,21 @@ class SearchStore {
     }
 
     try {
-      const page = await invoke<SearchPage>('search_music', { query: q });
+      let page: SearchPage;
+      if (this.pendingSearches.has(cacheKey)) {
+        page = await this.pendingSearches.get(cacheKey)!;
+      } else {
+        page = await invoke<SearchPage>('search_music', { query: q });
+        if (this.queryCache.size >= 50) {
+          const oldestKey = this.queryCache.keys().next().value;
+          if (oldestKey) this.queryCache.delete(oldestKey);
+        }
+        this.queryCache.set(cacheKey, { page, timestamp: Date.now() });
+      }
+
       this.results = page.songs || [];
       this.continuationToken = page.continuation_token ?? null;
       this.scrollTop = 0;
-      
-      // Store in LRU cache
-      if (this.queryCache.size >= 50) {
-        const oldestKey = this.queryCache.keys().next().value;
-        if (oldestKey) this.queryCache.delete(oldestKey);
-      }
-      this.queryCache.set(cacheKey, { page, timestamp: Date.now() });
 
       if (this.results.length > 0) player.prefetchStream(this.results[0]);
       if (this.results.length > 1) player.prefetchStream(this.results[1]);
@@ -117,6 +171,10 @@ class SearchStore {
   }
 
   clear() {
+    if (this.prefetchTimer) {
+      clearTimeout(this.prefetchTimer);
+      this.prefetchTimer = null;
+    }
     this.query = '';
     this.results = [];
     this.continuationToken = null;

@@ -9,6 +9,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 static STREAM_CACHE: LazyLock<RwLock<HashMap<String, (String, Instant)>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+static SEARCH_CACHE: LazyLock<RwLock<HashMap<String, (SearchPage, Instant)>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
 struct VisitorSession {
     visitor_id: String,
     cookies: String,
@@ -293,6 +296,22 @@ fn extract_videos_from_value(val: &Value, songs: &mut Vec<Song>) {
 }
 
 pub async fn search_songs(query: &str) -> Result<SearchPage, String> {
+    let q_norm = query.trim().to_lowercase();
+    if q_norm.is_empty() {
+        return Ok(SearchPage {
+            songs: Vec::new(),
+            continuation_token: None,
+        });
+    }
+
+    if let Ok(guard) = SEARCH_CACHE.read() {
+        if let Some((page, ts)) = guard.get(&q_norm) {
+            if ts.elapsed() < Duration::from_secs(15 * 60) {
+                return Ok(page.clone());
+            }
+        }
+    }
+
     let client = &HTTP_CLIENT;
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
@@ -302,15 +321,29 @@ pub async fn search_songs(query: &str) -> Result<SearchPage, String> {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         ),
     );
+    headers.insert("X-Youtube-Client-Name", HeaderValue::from_static("1"));
+    headers.insert("X-Youtube-Client-Version", HeaderValue::from_static("2.20240101.01.00"));
+
+    let visitor_id = {
+        VISITOR_SESSION.read().ok().and_then(|guard| guard.as_ref().map(|s| s.visitor_id.clone()))
+    };
+
+    let mut client_obj = json!({
+        "clientName": "WEB",
+        "clientVersion": "2.20240101.01.00",
+        "hl": "en",
+        "gl": "US"
+    });
+    if let Some(ref vid) = visitor_id {
+        client_obj["visitorData"] = json!(vid);
+        if let Ok(v_header) = HeaderValue::from_str(vid) {
+            headers.insert("X-Goog-Visitor-Id", v_header);
+        }
+    }
 
     let payload = json!({
         "context": {
-            "client": {
-                "clientName": "WEB",
-                "clientVersion": "2.20240101.01.00",
-                "hl": "en",
-                "gl": "US"
-            }
+            "client": client_obj
         },
         "query": query
     });
@@ -356,10 +389,19 @@ pub async fn search_songs(query: &str) -> Result<SearchPage, String> {
         }
     }
 
-    Ok(SearchPage {
+    let page = SearchPage {
         songs,
         continuation_token,
-    })
+    };
+
+    if let Ok(mut guard) = SEARCH_CACHE.write() {
+        if guard.len() >= 64 {
+            guard.clear();
+        }
+        guard.insert(q_norm, (page.clone(), Instant::now()));
+    }
+
+    Ok(page)
 }
 
 pub async fn search_continuation(token: &str) -> Result<SearchPage, String> {
@@ -372,15 +414,29 @@ pub async fn search_continuation(token: &str) -> Result<SearchPage, String> {
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         ),
     );
+    headers.insert("X-Youtube-Client-Name", HeaderValue::from_static("1"));
+    headers.insert("X-Youtube-Client-Version", HeaderValue::from_static("2.20240101.01.00"));
+
+    let visitor_id = {
+        VISITOR_SESSION.read().ok().and_then(|guard| guard.as_ref().map(|s| s.visitor_id.clone()))
+    };
+
+    let mut client_obj = json!({
+        "clientName": "WEB",
+        "clientVersion": "2.20240101.01.00",
+        "hl": "en",
+        "gl": "US"
+    });
+    if let Some(ref vid) = visitor_id {
+        client_obj["visitorData"] = json!(vid);
+        if let Ok(v_header) = HeaderValue::from_str(vid) {
+            headers.insert("X-Goog-Visitor-Id", v_header);
+        }
+    }
 
     let payload = json!({
         "context": {
-            "client": {
-                "clientName": "WEB",
-                "clientVersion": "2.20240101.01.00",
-                "hl": "en",
-                "gl": "US"
-            }
+            "client": client_obj
         },
         "continuation": token
     });
@@ -510,6 +566,61 @@ async fn get_or_refresh_visitor_session(client: &reqwest::Client, force_refresh:
         }
     }
 
+    // Fast-path 1: Official lightweight visitor_id endpoint (~1.4 KB payload, ~450ms)
+    let lightweight_payload = json!({
+        "context": {
+            "client": {
+                "clientName": "WEB",
+                "clientVersion": "2.20240101.01.00"
+            }
+        }
+    });
+
+    let lightweight_res = client
+        .post("https://www.youtube.com/youtubei/v1/visitor_id")
+        .header(CONTENT_TYPE, HeaderValue::from_static("application/json"))
+        .header(
+            USER_AGENT,
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        )
+        .json(&lightweight_payload)
+        .send()
+        .await;
+
+    if let Ok(resp) = lightweight_res {
+        if resp.status().is_success() {
+            let mut cookie_parts = Vec::new();
+            for val in resp.headers().get_all(reqwest::header::SET_COOKIE) {
+                if let Ok(s) = val.to_str() {
+                    if let Some(part) = s.split(';').next() {
+                        let trimmed = part.trim();
+                        if trimmed.contains('=') {
+                            cookie_parts.push(trimmed.to_string());
+                        }
+                    }
+                }
+            }
+            let cookies_str = cookie_parts.join("; ");
+
+            if let Ok(data) = resp.json::<Value>().await {
+                if let Some(vid) = data.pointer("/responseContext/visitorData").and_then(|v| v.as_str()) {
+                    if !vid.is_empty() {
+                        let session = VisitorSession {
+                            visitor_id: vid.to_string(),
+                            cookies: cookies_str.clone(),
+                            timestamp: Instant::now(),
+                        };
+                        if let Ok(mut guard) = VISITOR_SESSION.write() {
+                            *guard = Some(session);
+                        }
+                        return Ok((vid.to_string(), cookies_str));
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback 2: Full desktop homepage HTML scrape
     let resp = client
         .get("https://www.youtube.com/")
         .header(
@@ -571,6 +682,11 @@ async fn get_or_refresh_visitor_session(client: &reqwest::Client, force_refresh:
     }
 
     Ok((visitor_id, cookies_str))
+}
+
+pub async fn prewarm_session() {
+    let client = &HTTP_CLIENT;
+    let _ = get_or_refresh_visitor_session(client, false).await;
 }
 
 pub async fn resolve_stream_url_innertube(video_id: &str) -> Result<String, String> {

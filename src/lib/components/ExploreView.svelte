@@ -20,17 +20,29 @@
     { id: 'lofi', label: 'Lofi', query: 'Lofi Beats to relax study to' },
   ];
 
+  const categoryCache = new Map<string, { songs: Song[]; token: string | null }>();
+
   async function loadCategory(catId: 'trending' | 'chill' | 'workout' | 'lofi') {
     activeCategory = catId;
-    isLoading = true;
-    continuationToken = null;
     const item = categories.find(c => c.id === catId);
     if (!item) return;
+
+    if (categoryCache.has(catId)) {
+      const cached = categoryCache.get(catId)!;
+      trendingSongs = cached.songs;
+      continuationToken = cached.token;
+      isLoading = false;
+      return;
+    }
+
+    isLoading = true;
+    continuationToken = null;
 
     try {
       const page = await invoke<SearchPage>('search_music', { query: item.query });
       trendingSongs = page.songs || [];
       continuationToken = page.continuation_token ?? null;
+      categoryCache.set(catId, { songs: trendingSongs, token: continuationToken });
     } catch (e) {
       console.error(e);
       trendingSongs = [];
@@ -64,6 +76,7 @@
         trendingSongs = [...trendingSongs, ...collected];
       }
       continuationToken = token;
+      categoryCache.set(activeCategory, { songs: trendingSongs, token: continuationToken });
     } catch (e) {
       console.error(e);
     } finally {

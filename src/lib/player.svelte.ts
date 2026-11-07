@@ -284,20 +284,44 @@ class PlayerState {
   // Precision lead-time offset (compensates for audio buffer latency, vocal attack lead, and visual transition easing)
   private readonly LYRIC_OFFSET = 0.25;
 
-  private updateActiveLyric() {
+  private updateActiveLyricWithPos(cur: number) {
     if (this.parsedLyrics.length === 0) {
       if (this.activeLyricIndex !== -1) {
         this.activeLyricIndex = -1;
       }
       return;
     }
-    const ct = this.currentTime + this.LYRIC_OFFSET;
+    const ct = cur + this.LYRIC_OFFSET;
+    const len = this.parsedLyrics.length;
+
+    // Fast-path O(1): check current active line and immediate next line
+    const curr = this.activeLyricIndex;
+    if (curr >= 0 && curr < len) {
+      const currTime = this.parsedLyrics[curr].time;
+      const nextTime = curr + 1 < len ? this.parsedLyrics[curr + 1].time : Infinity;
+      if (ct >= currTime && ct < nextTime) {
+        return; // Still in current lyric line, zero allocation or loop
+      }
+      if (curr + 1 < len && ct >= nextTime) {
+        const nextNextTime = curr + 2 < len ? this.parsedLyrics[curr + 2].time : Infinity;
+        if (ct < nextNextTime) {
+          this.activeLyricIndex = curr + 1;
+          return;
+        }
+      }
+    }
+
+    // Binary search fallback for track skips or seeks: O(log n)
+    let low = 0;
+    let high = len - 1;
     let idx = -1;
-    for (let i = 0; i < this.parsedLyrics.length; i++) {
-      if (ct >= this.parsedLyrics[i].time) {
-        idx = i;
+    while (low <= high) {
+      const mid = (low + high) >> 1;
+      if (this.parsedLyrics[mid].time <= ct) {
+        idx = mid;
+        low = mid + 1;
       } else {
-        break;
+        high = mid - 1;
       }
     }
     if (this.activeLyricIndex !== idx) {
@@ -305,10 +329,19 @@ class PlayerState {
     }
   }
 
+  private updateActiveLyric() {
+    this.updateActiveLyricWithPos(this.currentTime);
+  }
+
   tickLyricSync() {
     if (this.audio && this.isPlaying && this.parsedLyrics.length > 0) {
-      this.currentTime = this.audio.currentTime;
-      this.updateActiveLyric();
+      const cur = this.audio.currentTime;
+      this.updateActiveLyricWithPos(cur);
+      // Throttle reactive Svelte 5 currentTime rune updates to ~12Hz (every ~80ms)
+      // This completely eliminates high-frequency layout re-renders on 60Hz/120Hz screens
+      if (Math.abs(cur - this.currentTime) >= 0.08) {
+        this.currentTime = cur;
+      }
     }
   }
 

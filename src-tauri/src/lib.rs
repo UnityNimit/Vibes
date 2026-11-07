@@ -308,6 +308,11 @@ pub fn run() {
                 cache::init_app_dir(dir);
             }
 
+            // Pre-warm YouTube visitor session & connection pool asynchronously on boot
+            tauri::async_runtime::spawn(async {
+                youtube::prewarm_session().await;
+            });
+
             #[cfg(desktop)]
             if let Some(icon) = app.default_window_icon() {
                 for (_label, window) in app.webview_windows() {

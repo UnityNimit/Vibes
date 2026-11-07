@@ -139,16 +139,17 @@ pub async fn download_song_async(song: Song) -> Result<(), String> {
         .and_then(|s| s.parse().ok())
         .unwrap_or(0);
 
-    let mut file = OpenOptions::new()
+    let file = OpenOptions::new()
         .create(true)
         .write(true)
         .truncate(true)
         .open(&temp_path)
         .map_err(|e| format!("Failed to create temporary cache file: {}", e))?;
+    let mut writer = std::io::BufWriter::with_capacity(256 * 1024, file);
 
     if total_size >= 50_000 {
-        // High-speed chunked range download (512 KB chunks bypass YouTube real-time throttling)
-        let chunk_size: usize = 512 * 1024;
+        // High-speed chunked range download (1024 KB chunks halve HTTP round-trips while bypassing YouTube throttling)
+        let chunk_size: usize = 1024 * 1024;
         let mut offset: usize = 0;
 
         while offset < total_size {
@@ -189,7 +190,7 @@ pub async fn download_song_async(song: Song) -> Result<(), String> {
             })?;
 
             offset += b.len();
-            file.write_all(&b).map_err(|e| {
+            writer.write_all(&b).map_err(|e| {
                 let _ = fs::remove_file(&temp_path);
                 format!("Failed writing chunk to disk: {}", e)
             })?;
@@ -215,14 +216,19 @@ pub async fn download_song_async(song: Song) -> Result<(), String> {
             format!("Failed reading audio bytes: {}", e)
         })?;
 
-        file.write_all(&full_bytes).map_err(|e| {
+        writer.write_all(&full_bytes).map_err(|e| {
             let _ = fs::remove_file(&temp_path);
             format!("Failed writing cache file: {}", e)
         })?;
     }
 
-    file.flush().map_err(|e| format!("Failed flushing cache file: {}", e))?;
-    drop(file);
+    writer.flush().map_err(|e| {
+        let _ = fs::remove_file(&temp_path);
+        format!("Failed flushing cache file: {}", e)
+    })?;
+    drop(writer);
+
+
 
     // Verify written file size
     let final_len = fs::metadata(&temp_path).map(|m| m.len()).unwrap_or(0);

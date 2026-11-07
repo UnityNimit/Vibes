@@ -190,7 +190,7 @@
   }
 
   function handleInput(e: Event) {
-    searchStore.query = (e.target as HTMLInputElement).value;
+    searchStore.onQueryInput((e.target as HTMLInputElement).value);
   }
 
   async function search(searchQuery?: string) {
