@@ -177,7 +177,7 @@
   </span>
 
   <div
-    class="fixed bottom-0 left-0 right-0 z-40 bg-black/95 backdrop-blur-2xl px-4 sm:px-6 flex items-center justify-between select-none shadow-2xl transition-all duration-300 font-sans overflow-visible"
+    class="fixed bottom-0 left-0 right-0 z-40 {isMobilePlayer ? 'bg-[#0a0a0c]' : 'bg-black/95 backdrop-blur-2xl'} px-4 sm:px-6 flex items-center justify-between select-none shadow-2xl transition-all duration-300 font-sans overflow-visible"
     style="height: {isMobilePlayer ? 'calc(5rem + env(safe-area-inset-bottom, 0px))' : '5rem'}; padding-bottom: env(safe-area-inset-bottom, 0px);"
   >
     {#if isMobilePlayer}

@@ -104,6 +104,10 @@ class MainActivity : TauriActivity() {
                 mediaPlaybackRequiresUserGesture = false
                 domStorageEnabled = true
                 databaseEnabled = true
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    offscreenPreRaster = true
+                }
+                cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
             }
             webView.addJavascriptInterface(AndroidMediaInterface(this), "AndroidMediaNotification")
         } catch (t: Throwable) {

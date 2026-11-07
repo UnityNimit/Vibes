@@ -6,6 +6,15 @@ use std::sync::OnceLock;
 use std::time::Duration;
 
 static APP_DATA_DIR: OnceLock<PathBuf> = OnceLock::new();
+static CACHE_INDEX: std::sync::LazyLock<std::sync::RwLock<Option<Vec<CacheItem>>>> =
+    std::sync::LazyLock::new(|| std::sync::RwLock::new(None));
+
+pub fn invalidate_cache_index() {
+    if let Ok(mut lock) = CACHE_INDEX.write() {
+        *lock = None;
+    }
+}
+
 
 pub fn init_app_dir(dir: PathBuf) {
     let _ = fs::create_dir_all(&dir);
@@ -85,10 +94,7 @@ pub async fn download_song_async(song: Song) -> Result<(), String> {
     // 2. Resolve direct audio stream URL
     let mut stream_url = crate::youtube::resolve_stream_url(&video_id).await?;
 
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(30))
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
+    let client = &crate::youtube::HTTP_CLIENT;
 
     let user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 15_7_3) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.0 Safari/605.1.15";
 
@@ -233,6 +239,7 @@ pub async fn download_song_async(song: Song) -> Result<(), String> {
     })?;
 
     save_song_metadata(&song)?;
+    invalidate_cache_index();
     println!("[Cache Saved] Downloaded: {} ({}) [{} KB]", song.title, video_id, final_len / 1024);
     Ok(())
 }
@@ -242,6 +249,19 @@ pub async fn auto_cache_song(song: Song) -> Result<(), String> {
 }
 
 pub fn get_cached_songs() -> Result<Vec<CacheItem>, String> {
+    if let Ok(lock) = CACHE_INDEX.read() {
+        if let Some(ref items) = *lock {
+            return Ok(items.clone());
+        }
+    }
+    let items = scan_cached_songs_from_disk()?;
+    if let Ok(mut lock) = CACHE_INDEX.write() {
+        *lock = Some(items.clone());
+    }
+    Ok(items)
+}
+
+fn scan_cached_songs_from_disk() -> Result<Vec<CacheItem>, String> {
     let cache_dir = get_cache_dir();
     let mut items = Vec::new();
 
@@ -293,6 +313,7 @@ pub fn delete_cache_item(video_id: &str) -> Result<(), String> {
     let _ = fs::remove_file(audio_path);
     let _ = fs::remove_file(temp_path);
     let _ = fs::remove_file(meta_path);
+    invalidate_cache_index();
     Ok(())
 }
 
@@ -303,6 +324,7 @@ pub fn clear_all_cache_files() -> Result<(), String> {
             let _ = fs::remove_file(entry.path());
         }
     }
+    invalidate_cache_index();
     Ok(())
 }
 

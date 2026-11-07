@@ -55,7 +55,7 @@ fn clean_lyrics_artist(artist: &str) -> String {
 }
 
 pub async fn fetch_lyrics(title: &str, artist: &str, duration_secs: Option<u64>) -> Result<LyricsResult, String> {
-    let client = reqwest::Client::new();
+    let client = &crate::youtube::HTTP_CLIENT;
     let clean_title = clean_lyrics_title(title);
     let clean_artist = clean_lyrics_artist(artist);
 

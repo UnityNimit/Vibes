@@ -54,9 +54,12 @@ export class RecommendationEngine {
         this.hydrateFromStorage();
 
         // If feed is empty or stale (> 15 minutes), trigger background refresh
+        const hasCached = this.trendingSongs.length > 0 && this.recommendedSongs.length > 0;
         const isStale = Date.now() - this.lastUpdated > 15 * 60 * 1000;
-        if (this.trendingSongs.length === 0 || this.recommendedSongs.length === 0 || isStale) {
-          setTimeout(() => this.refreshAllFeeds(true), 200);
+        if (!hasCached || isStale) {
+          // If we have cached songs, delay background sync by 3.5s so startup CPU/network is 100% free for the user
+          const delay = hasCached ? 3500 : 300;
+          setTimeout(() => this.refreshAllFeeds(true), delay);
         }
 
         window.addEventListener('vibes:network-online', () => {
@@ -410,9 +413,15 @@ export class RecommendationEngine {
     if (this.isRefreshingAll) return;
     this.isRefreshingAll = true;
     try {
+      // Stagger: Trending + Recommended first (the top 2 carousels visible in viewport)
       await Promise.allSettled([
         this.refreshTrending(force),
-        this.refreshRecommended(force),
+        this.refreshRecommended(force)
+      ]);
+      this.persistFeed();
+
+      // New To You and Old Ones staggered slightly so network pipe doesn't congest
+      await Promise.allSettled([
         this.refreshNewToYou(force),
         this.refreshOldOnes(force),
         this.updateRecommendedSearches()

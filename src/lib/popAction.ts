@@ -11,15 +11,27 @@
  * 5. Single unified keyframe: Synchronous transform & opacity, zero mid-animation snapping.
  */
 
+const scrollParentCache = new WeakMap<HTMLElement, HTMLElement | null>();
+
 function getScrollParent(node: HTMLElement): HTMLElement | null {
+  const cached = scrollParentCache.get(node);
+  if (cached !== undefined) return cached;
+
   let cur = node.parentElement;
   while (cur && cur !== document.body) {
+    const cl = cur.classList;
+    if (cl && (cl.contains('overflow-y-auto') || cl.contains('overflow-auto') || cl.contains('overflow-y-scroll'))) {
+      scrollParentCache.set(node, cur);
+      return cur;
+    }
     const style = window.getComputedStyle(cur);
     if (/(auto|scroll)/.test(style.overflowY + style.overflowX + style.overflow)) {
+      scrollParentCache.set(node, cur);
       return cur;
     }
     cur = cur.parentElement;
   }
+  scrollParentCache.set(node, null);
   return null;
 }
 

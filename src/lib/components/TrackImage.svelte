@@ -139,6 +139,7 @@
       onerror={handleError}
       class="w-full h-full object-cover block transition-all duration-300 {isLoaded ? 'opacity-100' : 'opacity-0'} {isLetterboxed ? 'scale-[1.34]' : 'scale-100'} {className}"
       loading="lazy"
+      decoding="async"
     />
   {/if}
 </div>

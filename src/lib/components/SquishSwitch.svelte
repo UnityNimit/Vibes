@@ -199,7 +199,7 @@
       grab: null,
       moved: false,
       startX: e.clientX,
-      onAtPress: on,
+      onAtPress: !!on,
       slop: e.pointerType === 'touch' ? 8 : 4,
       lastTime: performance.now()
     };

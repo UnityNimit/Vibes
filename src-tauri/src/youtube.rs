@@ -18,6 +18,16 @@ struct VisitorSession {
 static VISITOR_SESSION: LazyLock<RwLock<Option<VisitorSession>>> =
     LazyLock::new(|| RwLock::new(None));
 
+pub static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
+    reqwest::Client::builder()
+        .tcp_keepalive(Duration::from_secs(60))
+        .pool_idle_timeout(Duration::from_secs(90))
+        .pool_max_idle_per_host(10)
+        .timeout(Duration::from_secs(15))
+        .build()
+        .unwrap_or_else(|_| reqwest::Client::new())
+});
+
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
 
@@ -280,7 +290,7 @@ fn extract_videos_from_value(val: &Value, songs: &mut Vec<Song>) {
 }
 
 pub async fn search_songs(query: &str) -> Result<SearchPage, String> {
-    let client = reqwest::Client::new();
+    let client = &HTTP_CLIENT;
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
@@ -350,7 +360,7 @@ pub async fn search_songs(query: &str) -> Result<SearchPage, String> {
 }
 
 pub async fn search_continuation(token: &str) -> Result<SearchPage, String> {
-    let client = reqwest::Client::new();
+    let client = &HTTP_CLIENT;
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
@@ -422,7 +432,7 @@ pub async fn search_continuation(token: &str) -> Result<SearchPage, String> {
 }
 
 pub async fn get_suggestions(query: &str) -> Result<Vec<String>, String> {
-    let client = reqwest::Client::new();
+    let client = &HTTP_CLIENT;
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
@@ -561,10 +571,7 @@ async fn get_or_refresh_visitor_session(client: &reqwest::Client, force_refresh:
 }
 
 pub async fn resolve_stream_url_innertube(video_id: &str) -> Result<String, String> {
-    let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(8))
-        .build()
-        .unwrap_or_else(|_| reqwest::Client::new());
+    let client = &HTTP_CLIENT;
 
     for attempt in 0..2 {
         let force_refresh = attempt > 0;
@@ -836,7 +843,7 @@ pub async fn get_similar_songs(video_id: &str) -> Result<SearchPage, String> {
         video_id.trim()
     };
 
-    let client = reqwest::Client::new();
+    let client = &HTTP_CLIENT;
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
@@ -911,7 +918,7 @@ pub async fn get_similar_songs(video_id: &str) -> Result<SearchPage, String> {
 }
 
 pub async fn get_more_similar_songs(token: &str) -> Result<SearchPage, String> {
-    let client = reqwest::Client::new();
+    let client = &HTTP_CLIENT;
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
@@ -1064,7 +1071,7 @@ pub async fn get_charts_feed(country_code: Option<&str>) -> Result<Vec<Song>, St
         _ => "US".to_string(),
     };
 
-    let client = reqwest::Client::new();
+    let client = &HTTP_CLIENT;
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
@@ -1183,7 +1190,7 @@ pub async fn get_explore_trending(country_code: Option<&str>) -> Result<Vec<Song
         _ => "US".to_string(),
     };
 
-    let client = reqwest::Client::new();
+    let client = &HTTP_CLIENT;
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
@@ -1382,7 +1389,7 @@ pub async fn get_new_releases(country_code: Option<&str>) -> Result<Vec<Song>, S
         _ => "US".to_string(),
     };
 
-    let client = reqwest::Client::new();
+    let client = &HTTP_CLIENT;
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
@@ -1605,7 +1612,7 @@ fn extract_continuation_token(val: &Value) -> Option<String> {
 }
 
 pub async fn import_youtube_playlist(playlist_id: &str) -> Result<Playlist, String> {
-    let client = reqwest::Client::new();
+    let client = &HTTP_CLIENT;
     let mut headers = HeaderMap::new();
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
@@ -1725,7 +1732,7 @@ pub async fn import_youtube_playlist(playlist_id: &str) -> Result<Playlist, Stri
 }
 
 pub async fn import_spotify_playlist(spotify_id: &str, is_album: bool) -> Result<Playlist, String> {
-    let client = reqwest::Client::new();
+    let client = &HTTP_CLIENT;
     let entity_type = if is_album { "album" } else { "playlist" };
     let embed_url = format!("https://open.spotify.com/embed/{}/{}", entity_type, spotify_id);
 

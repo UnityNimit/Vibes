@@ -67,7 +67,7 @@ export function getHighQualityThumbCandidates(
 
   // 1. Google User Content / YouTube Music album art (high quality square crop)
   if (raw.includes('googleusercontent.com')) {
-    const size = highQuality ? 'w1200-h1200' : 'w544-h544';
+    const size = highQuality ? 'w1200-h1200' : 'w180-h180';
     const upgraded = raw
       .replace(/=w\d+-h\d+[^?#]*/, `=${size}-l90-rj`)
       .replace(/=s\d+[^?#]*/, `=${size}`);

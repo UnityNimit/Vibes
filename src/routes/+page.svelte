@@ -19,6 +19,13 @@
 
   let currentTab = $derived(navigationStore.currentTab as Tab);
   let isMobileView = $state(isMobile());
+  let mountedTabs = $state<Set<Tab>>(new Set([(navigationStore.currentTab as Tab) || 'search']));
+
+  $effect(() => {
+    if (!mountedTabs.has(currentTab)) {
+      mountedTabs = new Set([...mountedTabs, currentTab]);
+    }
+  });
 
   onMount(() => {
     isMobileView = isMobile();
@@ -106,25 +113,37 @@
 
     <!-- Main Content Area (Pure black, no borders, preserved view state) -->
     <main class="flex-1 h-full flex flex-col relative overflow-hidden bg-black">
-      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'search' ? '' : 'hidden'}">
-        <SearchView />
-      </div>
-      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'liked' ? '' : 'hidden'}">
-        <LikedView />
-      </div>
-      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'saved' ? '' : 'hidden'}">
-        <CacheView />
-      </div>
-      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'playlists' ? '' : 'hidden'}">
-        <PlaylistsView />
-      </div>
-      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'jam' ? '' : 'hidden'}">
-        <JamView />
-      </div>
-      <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'settings' ? '' : 'hidden'}">
-        <SettingsView />
-      </div>
-      {#if !isMobileView}
+      {#if mountedTabs.has('search')}
+        <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'search' ? '' : 'hidden'}">
+          <SearchView />
+        </div>
+      {/if}
+      {#if mountedTabs.has('liked')}
+        <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'liked' ? '' : 'hidden'}">
+          <LikedView />
+        </div>
+      {/if}
+      {#if mountedTabs.has('saved')}
+        <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'saved' ? '' : 'hidden'}">
+          <CacheView />
+        </div>
+      {/if}
+      {#if mountedTabs.has('playlists')}
+        <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'playlists' ? '' : 'hidden'}">
+          <PlaylistsView />
+        </div>
+      {/if}
+      {#if mountedTabs.has('jam')}
+        <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'jam' ? '' : 'hidden'}">
+          <JamView />
+        </div>
+      {/if}
+      {#if mountedTabs.has('settings')}
+        <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'settings' ? '' : 'hidden'}">
+          <SettingsView />
+        </div>
+      {/if}
+      {#if !isMobileView && mountedTabs.has('now_playing')}
         <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'now_playing' ? '' : 'hidden'}">
           <NowPlayingView onClose={toggleNowPlaying} />
         </div>
@@ -139,7 +158,7 @@
     onSelectTab={handleSelectTab}
   />
 
-  {#if isMobileView}
+  {#if isMobileView && mountedTabs.has('now_playing')}
     <!-- Full-Screen Animated Bigger Player on Mobile (Android & iOS) -->
     <div
       class="fixed inset-0 z-50 bg-black transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] {currentTab === 'now_playing' ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'}"

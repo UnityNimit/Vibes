@@ -12,6 +12,9 @@ class SearchStore {
   isLoadingMore = $state<boolean>(false);
   scrollTop = $state<number>(0);
 
+  // High-performance in-memory search query LRU cache (0ms instant repeat searches)
+  private queryCache = new Map<string, { page: SearchPage; timestamp: number }>();
+
   // Horizontal scroll offsets for explore carousels
   carouselScrolls = $state<{
     recommended: number;
@@ -46,11 +49,31 @@ class SearchStore {
 
     feedStore.recordSearch(q);
 
+    const cacheKey = q.toLowerCase();
+    const cached = this.queryCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 15 * 60 * 1000) {
+      this.results = cached.page.songs || [];
+      this.continuationToken = cached.page.continuation_token ?? null;
+      this.scrollTop = 0;
+      this.isSearching = false;
+      if (this.results.length > 0) player.prefetchStream(this.results[0]);
+      if (this.results.length > 1) player.prefetchStream(this.results[1]);
+      return;
+    }
+
     try {
       const page = await invoke<SearchPage>('search_music', { query: q });
       this.results = page.songs || [];
       this.continuationToken = page.continuation_token ?? null;
       this.scrollTop = 0;
+      
+      // Store in LRU cache
+      if (this.queryCache.size >= 50) {
+        const oldestKey = this.queryCache.keys().next().value;
+        if (oldestKey) this.queryCache.delete(oldestKey);
+      }
+      this.queryCache.set(cacheKey, { page, timestamp: Date.now() });
+
       if (this.results.length > 0) player.prefetchStream(this.results[0]);
       if (this.results.length > 1) player.prefetchStream(this.results[1]);
     } catch (e) {
