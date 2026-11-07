@@ -20,6 +20,9 @@ static VISITOR_SESSION: LazyLock<RwLock<Option<VisitorSession>>> =
 
 pub static HTTP_CLIENT: LazyLock<reqwest::Client> = LazyLock::new(|| {
     reqwest::Client::builder()
+        .gzip(true)
+        .brotli(true)
+        .deflate(true)
         .tcp_keepalive(Duration::from_secs(60))
         .pool_idle_timeout(Duration::from_secs(90))
         .pool_max_idle_per_host(10)
