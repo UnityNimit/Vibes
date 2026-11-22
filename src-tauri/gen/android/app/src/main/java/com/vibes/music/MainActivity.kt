@@ -104,6 +104,9 @@ class MainActivity : TauriActivity() {
                 mediaPlaybackRequiresUserGesture = false
                 domStorageEnabled = true
                 databaseEnabled = true
+                setSupportZoom(false)
+                builtInZoomControls = false
+                displayZoomControls = false
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                     offscreenPreRaster = false
                 }

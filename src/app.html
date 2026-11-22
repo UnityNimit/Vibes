@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <link rel="icon" href="%sveltekit.assets%/favicon.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Vibes</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,6 +16,45 @@
           });
           window.addEventListener('unhandledrejection', function(e) {
             console.error('Unhandled promise rejection:', e.reason);
+          });
+
+          // Bulletproof gesture and zoom lock across Mobile & Desktop
+          // 1. Prevent multi-touch pinch to zoom on touch screens
+          document.addEventListener('touchstart', function(e) {
+            if (e.touches && e.touches.length > 1) {
+              e.preventDefault();
+            }
+          }, { passive: false });
+
+          document.addEventListener('touchmove', function(e) {
+            if (e.touches && e.touches.length > 1) {
+              e.preventDefault();
+            }
+          }, { passive: false });
+
+          // 2. Prevent WebKit / iOS gesture zoom events
+          document.addEventListener('gesturestart', function(e) {
+            e.preventDefault();
+          });
+          document.addEventListener('gesturechange', function(e) {
+            e.preventDefault();
+          });
+          document.addEventListener('gestureend', function(e) {
+            e.preventDefault();
+          });
+
+          // 3. Prevent Ctrl/Cmd + Wheel zoom on Desktop
+          window.addEventListener('wheel', function(e) {
+            if (e.ctrlKey || e.metaKey) {
+              e.preventDefault();
+            }
+          }, { passive: false });
+
+          // 4. Prevent Ctrl/Cmd + (+, -, 0) keyboard zoom shortcuts on Desktop
+          window.addEventListener('keydown', function(e) {
+            if ((e.ctrlKey || e.metaKey) && (e.key === '+' || e.key === '-' || e.key === '=' || e.key === '_' || e.key === '0')) {
+              e.preventDefault();
+            }
           });
         }
         if (typeof navigator !== 'undefined') {

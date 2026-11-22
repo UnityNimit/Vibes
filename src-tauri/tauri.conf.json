@@ -20,7 +20,8 @@
         "minHeight": 580,
         "decorations": false,
         "transparent": false,
-        "devtools": true
+        "devtools": true,
+        "zoomHotkeysEnabled": false
       }
     ],
     "security": {
