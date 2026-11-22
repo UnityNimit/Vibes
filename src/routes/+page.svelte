@@ -145,7 +145,7 @@
       {/if}
       {#if !isMobileView && mountedTabs.has('now_playing')}
         <div class="flex-1 h-full flex flex-col overflow-hidden {currentTab === 'now_playing' ? '' : 'hidden'}">
-          <NowPlayingView onClose={toggleNowPlaying} />
+          <NowPlayingView onClose={toggleNowPlaying} isVisible={currentTab === 'now_playing'} />
         </div>
       {/if}
     </main>
@@ -163,7 +163,7 @@
     <div
       class="fixed inset-0 z-50 bg-black transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] {currentTab === 'now_playing' ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'}"
     >
-      <NowPlayingView onClose={toggleNowPlaying} />
+      <NowPlayingView onClose={toggleNowPlaying} isVisible={currentTab === 'now_playing'} />
     </div>
   {/if}
 

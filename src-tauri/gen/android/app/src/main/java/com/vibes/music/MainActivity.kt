@@ -105,7 +105,7 @@ class MainActivity : TauriActivity() {
                 domStorageEnabled = true
                 databaseEnabled = true
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    offscreenPreRaster = true
+                    offscreenPreRaster = false
                 }
                 cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
             }

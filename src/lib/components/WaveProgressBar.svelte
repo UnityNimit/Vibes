@@ -8,6 +8,7 @@
     wavelength?: number;
     thumbRadius?: number;
     class?: string;
+    active?: boolean;
   }
 
   let {
@@ -15,7 +16,8 @@
     amplitude = 3.5,
     wavelength = 26,
     thumbRadius = 5,
-    class: className = ''
+    class: className = '',
+    active = true
   }: Props = $props();
 
   let canvasEl: HTMLCanvasElement | null = $state(null);
@@ -27,6 +29,7 @@
   let currentRatio = $state(0);
 
   let rafId: number | null = null;
+  let isAnimating = false;
   let resizeObserver: ResizeObserver | null = null;
   let wavePhase = 0;
   let lastFrameTime = performance.now();
@@ -69,8 +72,7 @@
     const targetRatio = Math.min(1, Math.max(0, player.currentTime / duration));
 
     if (!player.isPlaying) {
-      // When paused, smoothly damp towards target
-      currentRatio += (targetRatio - currentRatio) * Math.min(1, dt * 16);
+      currentRatio = targetRatio;
       return;
     }
 
@@ -163,40 +165,98 @@
     ctx.stroke();
   }
 
-  function animate(now: number) {
+  function renderSingleFrame() {
+    updateCanvasResolution();
+    const duration = player.duration > 0 ? player.duration : 0;
+    if (duration > 0) {
+      currentRatio = isDragging ? dragRatio : Math.min(1, Math.max(0, player.currentTime / duration));
+    } else {
+      currentRatio = 0;
+    }
+    drawWave(performance.now());
+  }
+
+  function loop(now: number) {
+    if (!isAnimating) return;
+
     const dt = Math.min(0.1, (now - lastFrameTime) / 1000);
     lastFrameTime = now;
 
-    // Advance wave phase smoothly when playing
     if (player.isPlaying && !isDragging) {
       wavePhase += dt * 5.0;
     }
 
     updateProgress(dt);
     drawWave(now);
-    rafId = requestAnimationFrame(animate);
+
+    rafId = requestAnimationFrame(loop);
   }
 
-  function handlePointerDown(e: PointerEvent) {
-    if (!canvasEl) return;
-    canvasEl.setPointerCapture(e.pointerId);
-    isDragging = true;
-    updateSeekFromPointer(e);
-  }
-
-  function handlePointerMove(e: PointerEvent) {
-    if (isDragging) {
-      updateSeekFromPointer(e);
+  function syncAnimationState() {
+    const shouldRun = active && (player.isPlaying || isDragging);
+    if (shouldRun) {
+      if (!isAnimating) {
+        isAnimating = true;
+        lastFrameTime = performance.now();
+        rafId = requestAnimationFrame(loop);
+      }
+    } else {
+      if (isAnimating) {
+        isAnimating = false;
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
+      }
+      if (active) {
+        renderSingleFrame();
+      }
     }
   }
 
+  $effect(() => {
+    const _active = active;
+    const _playing = player.isPlaying;
+    const _dragging = isDragging;
+    syncAnimationState();
+  });
+
+  $effect(() => {
+    const _t = player.currentTime;
+    const _dur = player.duration;
+    if (active && !player.isPlaying && !isDragging) {
+      renderSingleFrame();
+    }
+  });
+
+  function handlePointerDown(e: PointerEvent) {
+    if (!canvasEl) return;
+    try {
+      canvasEl.setPointerCapture(e.pointerId);
+    } catch (_) {}
+    isDragging = true;
+    updateSeekFromPointer(e);
+    syncAnimationState();
+  }
+
+  function handlePointerMove(e: PointerEvent) {
+    if (!isDragging) return;
+    updateSeekFromPointer(e);
+    drawWave(performance.now());
+  }
+
   function handlePointerUp(e: PointerEvent) {
-    if (isDragging) {
-      if (canvasEl && canvasEl.hasPointerCapture(e.pointerId)) {
+    if (!isDragging) return;
+    if (canvasEl) {
+      try {
         canvasEl.releasePointerCapture(e.pointerId);
-      }
-      isDragging = false;
-      const seekTime = dragRatio * (player.duration || 0);
+      } catch (_) {}
+    }
+    isDragging = false;
+    syncAnimationState();
+
+    if (player.duration > 0) {
+      const seekTime = dragRatio * player.duration;
       player.seek(seekTime);
     }
   }
@@ -220,21 +280,23 @@
     if (containerEl) {
       resizeObserver = new ResizeObserver(() => {
         updateCanvasResolution();
+        if (!isAnimating && active) renderSingleFrame();
       });
       resizeObserver.observe(containerEl);
     }
 
-    lastFrameTime = performance.now();
-    rafId = requestAnimationFrame(animate);
+    syncAnimationState();
 
     return () => {
-      if (rafId) cancelAnimationFrame(rafId);
+      isAnimating = false;
+      if (rafId !== null) cancelAnimationFrame(rafId);
       if (resizeObserver) resizeObserver.disconnect();
     };
   });
 
   onDestroy(() => {
-    if (rafId) cancelAnimationFrame(rafId);
+    isAnimating = false;
+    if (rafId !== null) cancelAnimationFrame(rafId);
     if (resizeObserver) resizeObserver.disconnect();
   });
 </script>

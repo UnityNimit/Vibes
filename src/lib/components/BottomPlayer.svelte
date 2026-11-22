@@ -192,6 +192,7 @@
           wavelength={18}
           thumbRadius={3.5}
           class="w-full"
+          active={isMobilePlayer && currentTab !== 'now_playing'}
         />
       </div>
 
@@ -488,6 +489,7 @@
             amplitude={2.5}
             wavelength={20}
             thumbRadius={4}
+            active={!isMobilePlayer}
           />
         </div>
         <span class="text-xs text-neutral-500 font-mono w-9 text-left flex-shrink-0">

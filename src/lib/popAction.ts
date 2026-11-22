@@ -1,14 +1,11 @@
 /**
  * React Bits Animated List Pop-In Animation Action (Continuous Scroll & Initial Stagger)
  *
- * Features:
+ * High-performance mobile & desktop architecture:
  * 1. Initial mount: Staggered cascade wave for elements currently in viewport (30ms stagger, max 250ms).
- * 2. Dynamic continuous scroll: Every item entering view pops in with snappy 420ms spring physics.
- * 3. Fast-scroll velocity protection: When scrolling at high speed (>1400px/s), items render immediately
- *    without blank holes or queue lag.
- * 4. Generous 350px hysteresis buffer: Items only reset when >350px away from the visible container edge,
- *    preventing any edge flickering when browsing nearby.
- * 5. Single unified keyframe: Synchronous transform & opacity, zero mid-animation snapping.
+ * 2. Single-pass entry: Elements entering view animate once, then unobserve to eliminate main-thread layout thrashing.
+ * 3. Fast-scroll protection: Immediate rendering when scrolling at high speed (>1400px/s).
+ * 4. Zero forced reflows: Eliminates offsetWidth calls during scroll to preserve 120 FPS compositor fluidity.
  */
 
 const scrollParentCache = new WeakMap<HTMLElement, HTMLElement | null>();
@@ -53,7 +50,7 @@ function isInitiallyVisible(node: HTMLElement, scrollParent: HTMLElement | null)
   );
 }
 
-// Global scroll velocity detector across any scrollable container
+// Global scroll velocity detector across scrollable containers
 let lastScrollTop = 0;
 let lastScrollTime = 0;
 let isFastScrolling = false;
@@ -99,62 +96,35 @@ function getObserver(): IntersectionObserver {
         }
 
         for (const entry of entries) {
-          const target = entry.target as HTMLElement;
-
           if (entry.isIntersecting) {
-            // Element entered viewport: trigger pop animation if pending or not currently active
-            if (target.classList.contains('pop-pending') || !target.classList.contains('animate-pop-in')) {
-              target.classList.remove('pop-pending');
+            const target = entry.target as HTMLElement;
+            // Unobserve immediately: element has arrived into view, no need for ongoing checks
+            sharedObserver?.unobserve(target);
+            target.classList.remove('pop-pending');
 
-              if (isFastScrolling) {
-                // High-velocity fling: render immediately without animation latency
-                target.classList.remove('animate-pop-in');
-              } else {
-                // Normal scroll: if arriving in a simultaneous burst (e.g. tab switch), stagger slightly
-                const delay = batchCount < 6 ? batchCount * 0.03 : 0;
-                batchCount++;
-
-                target.style.setProperty('--pop-delay', `${delay.toFixed(3)}s`);
-                target.classList.remove('animate-pop-in');
-                void target.offsetWidth; // Force reflow to cleanly restart spring keyframe
-                target.classList.add('animate-pop-in');
-
-                const onEnd = () => {
-                  target.removeEventListener('animationend', onEnd);
-                  target.classList.remove('animate-pop-in');
-                };
-                target.addEventListener('animationend', onEnd, { once: true });
-              }
-            }
-          } else {
-            // Element left viewport: only reset if safely > 350px offscreen (hysteresis deadband)
-            const rect = entry.boundingClientRect;
-            const scrollParent = getScrollParent(target);
-            const bounds = scrollParent
-              ? scrollParent.getBoundingClientRect()
-              : {
-                  top: 0,
-                  bottom: window.innerHeight || 800,
-                  left: 0,
-                  right: window.innerWidth || 1200
-                };
-
-            const isFarOffscreen =
-              rect.bottom < bounds.top - 350 ||
-              rect.top > bounds.bottom + 350 ||
-              rect.right < bounds.left - 350 ||
-              rect.left > bounds.right + 350;
-
-            if (isFarOffscreen) {
+            if (isFastScrolling) {
+              // High-velocity scroll: render immediately without animation latency
               target.classList.remove('animate-pop-in');
-              target.classList.add('pop-pending');
+            } else {
+              // Normal scroll: stagger slightly if arriving in simultaneous burst
+              const delay = batchCount < 6 ? batchCount * 0.03 : 0;
+              batchCount++;
+
+              target.style.setProperty('--pop-delay', `${delay.toFixed(3)}s`);
+              target.classList.add('animate-pop-in');
+
+              const onEnd = () => {
+                target.removeEventListener('animationend', onEnd);
+                target.classList.remove('animate-pop-in');
+              };
+              target.addEventListener('animationend', onEnd, { once: true });
             }
           }
         }
       },
       {
         root: null,
-        rootMargin: '40px',
+        rootMargin: '60px',
         threshold: 0
       }
     );
@@ -178,12 +148,14 @@ export function popItem(node: HTMLElement, index = 0) {
       node.classList.remove('animate-pop-in');
     };
     node.addEventListener('animationend', onEnd, { once: true });
-  } else {
-    // Offscreen item waiting for scroll entry
-    node.classList.add('pop-pending');
+
+    return {
+      destroy() {}
+    };
   }
 
-  // Observe all items so they dynamically pop when scrolled into view
+  // Offscreen item waiting for first scroll entry
+  node.classList.add('pop-pending');
   getObserver().observe(node);
 
   return {

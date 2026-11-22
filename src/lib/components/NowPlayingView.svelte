@@ -24,9 +24,10 @@
 
   interface Props {
     onClose?: () => void;
+    isVisible?: boolean;
   }
 
-  let { onClose }: Props = $props();
+  let { onClose, isVisible = true }: Props = $props();
 
   let isMobileView = $state(isMobile());
 
@@ -410,7 +411,7 @@
 
   // High-precision RAF lyric sync: ensures 0ms latency synchronization when lyrics are open
   $effect(() => {
-    if (!player.showLyrics || !player.isPlaying) return;
+    if (!isVisible || !player.showLyrics || !player.isPlaying) return;
 
     let animId: number;
     function syncLyrics() {
@@ -613,6 +614,7 @@
           wavelength={24}
           thumbRadius={5}
           class="w-full"
+          active={isVisible}
         />
 
         <!-- Below Progress Line: Time Stamps -->
