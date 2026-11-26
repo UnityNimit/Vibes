@@ -745,7 +745,7 @@ class PlayerState {
     if (!this.audio) return;
     this.audio.pause();
     this.isPlaying = false;
-    this.syncMediaNotification('state');
+    setTimeout(() => this.syncMediaNotification('state'), 0);
     if (!fromSync && this.onPlaybackChange) {
       this.onPlaybackChange('pause', { position: this.currentTime });
     }
@@ -765,7 +765,7 @@ class PlayerState {
       this.recoverStreamPlayback(this.currentTime || this.lastKnownPosition);
     });
     this.isPlaying = true;
-    this.syncMediaNotification('state');
+    setTimeout(() => this.syncMediaNotification('state'), 0);
     if (!fromSync && this.onPlaybackChange) {
       this.onPlaybackChange('play', {
         song: this.currentSong,
@@ -818,8 +818,19 @@ class PlayerState {
 
   async toggleLike() {
     if (!this.currentSong) return;
-    const newState = await likedStore.toggleLike(this.currentSong);
-    this.isLiked = newState;
+    const song = this.currentSong;
+    const optimistic = !this.isLiked;
+    this.isLiked = optimistic;
+    try {
+      const confirmed = await likedStore.toggleLike(song);
+      if (this.currentSong?.id === song.id) {
+        this.isLiked = confirmed;
+      }
+    } catch {
+      if (this.currentSong?.id === song.id) {
+        this.isLiked = !optimistic;
+      }
+    }
   }
 
   async toggleDownload() {
@@ -1012,17 +1023,23 @@ class PlayerState {
     if (this.repeatMode === 'off') this.repeatMode = 'one';
     else if (this.repeatMode === 'one') this.repeatMode = 'shuffle';
     else this.repeatMode = 'off';
+    const mode = this.repeatMode;
     if (typeof window !== 'undefined') {
-      localStorage.setItem('vibes_repeat_mode', this.repeatMode);
-      localStorage.setItem('vibes_shuffle', String(this.repeatMode === 'shuffle'));
+      setTimeout(() => {
+        localStorage.setItem('vibes_repeat_mode', mode);
+        localStorage.setItem('vibes_shuffle', String(mode === 'shuffle'));
+      }, 0);
     }
   }
 
   toggleShuffle() {
     this.repeatMode = this.repeatMode === 'shuffle' ? 'off' : 'shuffle';
+    const mode = this.repeatMode;
     if (typeof window !== 'undefined') {
-      localStorage.setItem('vibes_repeat_mode', this.repeatMode);
-      localStorage.setItem('vibes_shuffle', String(this.repeatMode === 'shuffle'));
+      setTimeout(() => {
+        localStorage.setItem('vibes_repeat_mode', mode);
+        localStorage.setItem('vibes_shuffle', String(mode === 'shuffle'));
+      }, 0);
     }
   }
 

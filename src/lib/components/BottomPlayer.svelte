@@ -177,7 +177,7 @@
   </span>
 
   <div
-    class="fixed bottom-0 left-0 right-0 z-40 {isMobilePlayer ? 'bg-[#0a0a0c]' : 'bg-black/95 backdrop-blur-2xl'} px-4 sm:px-6 flex items-center justify-between select-none shadow-2xl transition-all duration-300 font-sans overflow-visible"
+    class="fixed bottom-0 left-0 right-0 z-40 {isMobilePlayer ? 'bg-[#0a0a0c]' : 'bg-black/95 backdrop-blur-2xl'} px-4 sm:px-6 flex items-center justify-between select-none shadow-2xl transition-[transform,opacity] duration-300 font-sans overflow-visible"
     style="height: {isMobilePlayer ? 'calc(5rem + env(safe-area-inset-bottom, 0px))' : '5rem'}; padding-bottom: env(safe-area-inset-bottom, 0px);"
   >
     {#if isMobilePlayer}
@@ -218,7 +218,7 @@
                 alt={player.currentSong.title}
                 class="w-full h-full object-cover select-none pointer-events-none"
                 iconClass="w-6 h-6 text-neutral-500"
-                highQuality={true}
+                highQuality={false}
               />
 
               <!-- Iridescent Vinyl/CD Grooves & Radial Reflection -->
@@ -306,7 +306,7 @@
           <!-- Next -->
           <button
             onclick={(e) => { e.stopPropagation(); player.next(); }}
-            class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-300 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150 cursor-pointer flex-shrink-0"
+            class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-300 hover:text-white hover:bg-white/10 active:scale-90 transition-[transform,color] duration-150 cursor-pointer flex-shrink-0"
             aria-label="Next track"
           >
             <NextIcon size={20} />
@@ -330,7 +330,7 @@
             alt={player.currentSong.title}
             class="w-full h-full object-cover select-none pointer-events-none"
             iconClass="w-6 h-6 text-neutral-500"
-            highQuality={true}
+            highQuality={false}
           />
 
           <!-- Iridescent Vinyl/CD Grooves & Radial Reflection -->
@@ -426,7 +426,7 @@
         <!-- Like / Heart Button (Placed where shuffle used to be) -->
         <button
           onclick={() => player.toggleLike()}
-          class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150 cursor-pointer {player.isLiked ? 'text-accent' : ''}"
+          class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-[transform,color] duration-150 cursor-pointer {player.isLiked ? 'text-accent' : ''}"
           title={player.isLiked ? 'Unlike' : 'Like'}
           aria-label={player.isLiked ? 'Unlike' : 'Like'}
         >
@@ -436,7 +436,7 @@
         <!-- Prev -->
         <button
           onclick={() => player.prev()}
-          class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150 cursor-pointer"
+          class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-[transform,color] duration-150 cursor-pointer"
           title="Previous track"
           aria-label="Previous track"
         >
@@ -460,7 +460,7 @@
         <!-- Next -->
         <button
           onclick={() => player.next()}
-          class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150 cursor-pointer"
+          class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-[transform,color] duration-150 cursor-pointer"
           title="Next track"
           aria-label="Next track"
         >
@@ -470,7 +470,7 @@
         <!-- Repeat / Shuffle (Custom Morphing Icon: Line -> Circle -> 8 Loop Shuffle -> Line) -->
         <button
           onclick={() => player.toggleRepeat()}
-          class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-all duration-150 cursor-pointer {player.repeatMode !== 'off' ? 'text-accent' : ''}"
+          class="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white hover:bg-white/10 active:scale-90 transition-[transform,color] duration-150 cursor-pointer {player.repeatMode !== 'off' ? 'text-accent' : ''}"
           title={player.repeatMode === 'one' ? 'Repeat One (Click for Shuffle)' : player.repeatMode === 'shuffle' ? 'Shuffle (Click for Off)' : 'Sequential (Click for Repeat One)'}
           aria-label="Toggle repeat or shuffle mode"
         >

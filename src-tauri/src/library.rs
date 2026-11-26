@@ -32,7 +32,7 @@ pub fn toggle_favorite(song: Song) -> Result<bool, String> {
     };
 
     let file = get_fav_file();
-    let json_str = serde_json::to_string_pretty(&songs)
+    let json_str = serde_json::to_string(&songs)
         .map_err(|e| format!("Failed to serialize favorites: {}", e))?;
     fs::write(file, json_str).map_err(|e| format!("Failed to save favorites: {}", e))?;
 
@@ -60,7 +60,7 @@ pub fn get_playlists() -> Result<Vec<Playlist>, String> {
 
 fn save_playlists(playlists: &[Playlist]) -> Result<(), String> {
     let file = get_playlists_file();
-    let json_str = serde_json::to_string_pretty(playlists)
+    let json_str = serde_json::to_string(playlists)
         .map_err(|e| format!("Failed to serialize playlists: {}", e))?;
     fs::write(file, json_str).map_err(|e| format!("Failed to write playlists: {}", e))?;
     Ok(())

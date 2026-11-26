@@ -32,14 +32,18 @@ class LikedStore {
   async toggleLike(song: Song): Promise<boolean> {
     try {
       const isNowLiked = await invoke<boolean>('toggle_like', { song });
-      await this.refresh();
+      if (isNowLiked) {
+        this.songs = [song, ...this.songs.filter((s) => s.id !== song.id)];
+      } else {
+        this.songs = this.songs.filter((s) => s.id !== song.id);
+      }
       // Dynamically import feedStore to avoid circular module initialization
       const { feedStore } = await import('./feedStore.svelte');
       feedStore.recordLike(song, isNowLiked);
       return isNowLiked;
     } catch (e) {
       console.error('Failed to toggle like:', e);
-      return false;
+      return this.isLiked(song.id);
     }
   }
 }

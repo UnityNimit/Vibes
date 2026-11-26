@@ -45,6 +45,7 @@ export class RecommendationEngine {
   circadianInfo = $derived(getCircadianInfo());
 
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private persistTimer: ReturnType<typeof setTimeout> | null = null;
   private isRefreshingAll = false;
 
   constructor() {
@@ -104,9 +105,10 @@ export class RecommendationEngine {
     }
   }
 
-  persistFeed() {
+  private persistFeedNow() {
     if (typeof window === 'undefined') return;
     try {
+      const now = Date.now();
       const data: PersistentFeedData = {
         recommendedSongs: this.recommendedSongs.slice(0, 60),
         recommendedToken: this.recommendedToken,
@@ -117,15 +119,31 @@ export class RecommendationEngine {
         oldSongs: this.oldSongs.slice(0, 60),
         oldToken: this.oldToken,
         recommendedSearches: this.recommendedSearches,
-        lastUpdated: Date.now(),
+        lastUpdated: now,
         trendingMood: this.trendingMood,
         trendingRegion: this.trendingRegion
       };
       localStorage.setItem(FEED_STORAGE_KEY, JSON.stringify(data));
-      this.lastUpdated = data.lastUpdated;
+      this.lastUpdated = now;
     } catch (e) {
       console.error('[RecommendationEngine] Persist error:', e);
     }
+  }
+
+  persistFeed(immediate = false) {
+    if (typeof window === 'undefined') return;
+    if (this.persistTimer) {
+      clearTimeout(this.persistTimer);
+      this.persistTimer = null;
+    }
+    if (immediate) {
+      this.persistFeedNow();
+      return;
+    }
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = null;
+      this.persistFeedNow();
+    }, 800);
   }
 
   // --- TRENDING REVOLUTION: MOOD & REGION SWITCHING ---
@@ -426,7 +444,7 @@ export class RecommendationEngine {
         this.refreshOldOnes(force),
         this.updateRecommendedSearches()
       ]);
-      this.persistFeed();
+      this.persistFeed(true);
     } finally {
       this.isRefreshingAll = false;
     }

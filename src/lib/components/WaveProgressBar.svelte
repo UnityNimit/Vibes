@@ -23,21 +23,24 @@
   let canvasEl: HTMLCanvasElement | null = $state(null);
   let containerEl: HTMLDivElement | null = $state(null);
 
-  let isDragging = $state(false);
-  let isHovering = $state(false);
-  let dragRatio = $state(0);
-  let currentRatio = $state(0);
+  // Plain non-reactive state so the 120Hz canvas loop triggers ZERO Svelte signal overhead
+  let isDragging = false;
+  let isHovering = false;
+  let dragRatio = 0;
+  let currentRatio = 0;
+  let cachedAccent = '#ffffff';
 
   let rafId: number | null = null;
   let isAnimating = false;
   let resizeObserver: ResizeObserver | null = null;
+  let accentObserver: MutationObserver | null = null;
   let wavePhase = 0;
   let lastFrameTime = performance.now();
 
-  function getAccentColor(): string {
-    if (typeof window === 'undefined') return '#ffffff';
+  function refreshAccentColor() {
+    if (typeof window === 'undefined') return;
     const computed = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim();
-    return computed || '#ffffff';
+    cachedAccent = computed || '#ffffff';
   }
 
   function updateCanvasResolution() {
@@ -79,17 +82,15 @@
     // When playing: advance monotonically without jitter
     const diff = targetRatio - currentRatio;
     if (Math.abs(diff) > 0.03 || diff < -0.005) {
-      // Snappy seek/rewind recovery
       currentRatio = targetRatio;
     } else {
-      // Frame-rate independent monotonic step + soft convergence
       const nominalStep = (dt * (player.audio?.playbackRate || 1)) / duration;
       const correction = diff * Math.min(1, dt * 8);
       currentRatio = Math.min(1, Math.max(0, currentRatio + nominalStep + correction));
     }
   }
 
-  function drawWave(now: number) {
+  function drawWave() {
     if (!canvasEl) return;
     const ctx = canvasEl.getContext('2d');
     if (!ctx) return;
@@ -101,7 +102,6 @@
 
     ctx.clearRect(0, 0, width, canvasH);
 
-    // Padding ensures the circular thumb and rounded line caps never clip outside the canvas
     const maxThumbR = (thumbRadius + 1.5) * dpr;
     const pad = Math.ceil(maxThumbR + 2 * dpr);
     const startX = pad;
@@ -110,7 +110,7 @@
 
     const ratio = Math.min(1, Math.max(0, isDragging ? dragRatio : currentRatio));
     const progressX = startX + ratio * usableWidth;
-    const accentColor = getAccentColor();
+    const accentColor = cachedAccent;
     const trackWidth = 3 * dpr;
 
     // 1. Draw unplayed straight line (right of thumb to endX)
@@ -135,15 +135,16 @@
       const amp = amplitude * dpr;
       const wlen = wavelength * dpr;
       const taperDist = 16 * dpr;
+      const twoPiOverWlen = (Math.PI * 2) / wlen;
 
       ctx.moveTo(startX, centerY);
-      const step = Math.max(1, 1.5 * dpr);
+      const step = Math.max(2, 2.2 * dpr);
 
       for (let x = startX; x <= progressX; x += step) {
         const distFromStart = x - startX;
         const distFromEnd = progressX - x;
         const taper = Math.min(1, Math.min(distFromStart, distFromEnd) / taperDist);
-        const y = centerY + Math.sin(((x - startX) / wlen) * Math.PI * 2 - wavePhase) * amp * taper;
+        const y = centerY + Math.sin(distFromStart * twoPiOverWlen - wavePhase) * amp * taper;
         ctx.lineTo(x, y);
       }
       ctx.lineTo(progressX, centerY);
@@ -173,7 +174,7 @@
     } else {
       currentRatio = 0;
     }
-    drawWave(performance.now());
+    drawWave();
   }
 
   function loop(now: number) {
@@ -187,7 +188,7 @@
     }
 
     updateProgress(dt);
-    drawWave(now);
+    drawWave();
 
     rafId = requestAnimationFrame(loop);
   }
@@ -217,7 +218,6 @@
   $effect(() => {
     const _active = active;
     const _playing = player.isPlaying;
-    const _dragging = isDragging;
     syncAnimationState();
   });
 
@@ -242,7 +242,7 @@
   function handlePointerMove(e: PointerEvent) {
     if (!isDragging) return;
     updateSeekFromPointer(e);
-    drawWave(performance.now());
+    drawWave();
   }
 
   function handlePointerUp(e: PointerEvent) {
@@ -275,7 +275,19 @@
   }
 
   onMount(() => {
+    refreshAccentColor();
     updateCanvasResolution();
+
+    if (typeof MutationObserver !== 'undefined') {
+      accentObserver = new MutationObserver(() => {
+        refreshAccentColor();
+        if (!isAnimating && active) renderSingleFrame();
+      });
+      accentObserver.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['data-accent', 'style']
+      });
+    }
 
     if (containerEl) {
       resizeObserver = new ResizeObserver(() => {
@@ -291,6 +303,7 @@
       isAnimating = false;
       if (rafId !== null) cancelAnimationFrame(rafId);
       if (resizeObserver) resizeObserver.disconnect();
+      if (accentObserver) accentObserver.disconnect();
     };
   });
 
@@ -298,6 +311,7 @@
     isAnimating = false;
     if (rafId !== null) cancelAnimationFrame(rafId);
     if (resizeObserver) resizeObserver.disconnect();
+    if (accentObserver) accentObserver.disconnect();
   });
 </script>
 
@@ -308,8 +322,8 @@
     onpointermove={handlePointerMove}
     onpointerup={handlePointerUp}
     onpointercancel={handlePointerUp}
-    onmouseenter={() => (isHovering = true)}
-    onmouseleave={() => (isHovering = false)}
+    onmouseenter={() => { isHovering = true; if (!isAnimating && active) renderSingleFrame(); }}
+    onmouseleave={() => { isHovering = false; if (!isAnimating && active) renderSingleFrame(); }}
     class="w-full block"
   ></canvas>
 </div>

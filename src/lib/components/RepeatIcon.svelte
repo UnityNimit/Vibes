@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
+  import { onDestroy, onMount } from 'svelte';
+  import { cancelAnimations, runGpuAnim } from '../iconAnim';
 
   export type RepeatMode = 'off' | 'one' | 'shuffle' | 'all';
 
@@ -13,42 +14,28 @@
 
   type ShapeKind = 'line' | 'circle' | 'infinity';
 
-  // 26 Bezier coordinate floats (4 cubic segments, 5 anchors P0..P4, 8 handles C1..C8):
-  // [x0, y0, c1x, c1y, c2x, c2y, x1, y1, c3x, c3y, c4x, c4y, x2, y2, c5x, c5y, c6x, c6y, x3, y3, c7x, c7y, c8x, c8y, x4, y4]
+  // Exact canonical SVG geometry matching Vibes' Repeat / Shuffle ribbon topology
+  const PATH_LINE = 'M 4.20 12.00 L 19.80 12.00';
+  const PATH_CIRCLE =
+    'M 12 5.80 ' +
+    'C 8.58 5.80, 5.80 8.58, 5.80 12.00 ' +
+    'C 5.80 15.42, 8.58 18.20, 12.00 18.20 ' +
+    'C 15.42 18.20, 18.20 15.42, 18.20 12.00 ' +
+    'C 18.20 8.58, 15.42 5.80, 12.00 5.80 Z';
+  const PATH_INFINITY =
+    'M 12.00 12.00 ' +
+    'C 9.20 7.50, 4.20 7.50, 4.20 12.00 ' +
+    'C 4.20 16.50, 9.20 16.50, 12.00 12.00 ' +
+    'C 14.80 7.50, 19.80 7.50, 19.80 12.00 ' +
+    'C 19.80 16.50, 14.80 16.50, 12.00 12.00 Z';
 
-  const R = 6.2;
-  const K = +(R * 0.5522847).toFixed(2); // 3.42
-  const LINE_LEN = 15.6; // 4.2 -> 19.8
-  const CIRCLE_LEN = 2 * Math.PI * R; // ~38.96
+  let lineEl = $state<SVGSVGElement | null>(null);
+  let circleEl = $state<SVGSVGElement | null>(null);
+  let infinityEl = $state<SVGSVGElement | null>(null);
 
-  // 1. Off: Unfolded, monotonic horizontal ribbon from left (4.2, 12) to right (19.8, 12)
-  const P_LINE = [
-    4.2, 12,
-    5.5, 12, 6.8, 12, 8.1, 12,
-    9.4, 12, 10.7, 12, 12.0, 12,
-    13.3, 12, 14.6, 12, 15.9, 12,
-    17.2, 12, 18.5, 12, 19.8, 12
-  ];
-
-  // 2. One: Ribbon curls upward from both ends and fuses at top (12, 12 - R)
-  // P0 = Top, P1 = Left, P2 = Bottom, P3 = Right, P4 = Top
-  const P_CIRCLE = [
-    12, 12 - R,
-    12 - K, 12 - R, 12 - R, 12 - K, 12 - R, 12,
-    12 - R, 12 + K, 12 - K, 12 + R, 12, 12 + R,
-    12 + K, 12 + R, 12 + R, 12 + K, 12 + R, 12,
-    12 + R, 12 - K, 12 + K, 12 - R, 12, 12 - R
-  ];
-
-  // 3. Shuffle / All: Top and bottom pinch to (12, 12) while the right lobe twists into an 8 / infinity figure
-  // P0 = Center, P1 = Left Apex (4.2, 12), P2 = Center, P3 = Right Apex (19.8, 12), P4 = Center
-  const P_INFINITY = [
-    12, 12,
-    9.2, 7.5, 4.2, 7.5, 4.2, 12,
-    4.2, 16.5, 9.2, 16.5, 12, 12,
-    14.8, 7.5, 19.8, 7.5, 19.8, 12,
-    19.8, 16.5, 14.8, 16.5, 12, 12
-  ];
+  const activeAnims: Animation[] = [];
+  let initialized = false;
+  let prevKind: ShapeKind | null = null;
 
   function getShapeKind(m: RepeatMode): ShapeKind {
     if (m === 'one') return 'circle';
@@ -56,254 +43,153 @@
     return 'line';
   }
 
-  function getTarget(kind: ShapeKind): number[] {
-    if (kind === 'circle') return P_CIRCLE;
-    if (kind === 'infinity') return P_INFINITY;
-    return P_LINE;
+  function getLayer(kind: ShapeKind): SVGSVGElement | null {
+    if (kind === 'circle') return circleEl;
+    if (kind === 'infinity') return infinityEl;
+    return lineEl;
   }
 
-  function lerp(a: number, b: number, t: number): number {
-    return a + (b - a) * t;
-  }
-
-  // Exact analytical circular-arc generator:
-  // s = 0 -> straight line of length 15.6; s = 1 -> closed circle of radius 6.2 (length ~38.96)
-  function evalLineToCircle(s: number): number[] {
-    if (s <= 0.0001) return [...P_LINE];
-    if (s >= 0.9999) return [...P_CIRCLE];
-
-    // Length leads slightly so the line visibly elongates as it begins curling upward
-    const sLen = Math.pow(s, 0.72);
-    const sAngle = Math.pow(s, 1.08);
-
-    const L = lerp(LINE_LEN, CIRCLE_LEN, sLen);
-    const theta = Math.max(0.001, sAngle * Math.PI * 2);
-    const rho = L / theta; // Instantaneous radius of curvature
-
-    // Keep the top curling tips and bottom midpoint vertically centered around y = 12
-    const yMid = 12 + 0.5 * rho * (1 - Math.cos(theta * 0.5));
-    const dPhi = theta * 0.25;
-    const handle = rho * (4 / 3) * Math.tan(dPhi * 0.25);
-
-    const anchorsX: number[] = [];
-    const anchorsY: number[] = [];
-    const tanX: number[] = [];
-    const tanY: number[] = [];
-
-    for (let k = 0; k <= 4; k++) {
-      const phi = (k * 0.5 - 1) * (theta * 0.5); // -theta/2 .. +theta/2
-      const sinP = Math.sin(phi);
-      const cosP = Math.cos(phi);
-
-      anchorsX.push(12 + rho * sinP);
-      anchorsY.push(yMid - rho * (1 - cosP));
-      tanX.push(cosP);
-      tanY.push(-sinP);
+  function applyRestingState(kind: ShapeKind) {
+    cancelAnimations(activeAnims);
+    const layers: ShapeKind[] = ['line', 'circle', 'infinity'];
+    for (const k of layers) {
+      const el = getLayer(k);
+      if (!el) continue;
+      const active = k === kind;
+      el.style.opacity = active ? '1' : '0';
+      el.style.transform = active ? 'scale(1) rotate(0deg)' : 'scale(0.55) rotate(-25deg)';
     }
-
-    const out = new Array<number>(26);
-    out[0] = anchorsX[0];
-    out[1] = anchorsY[0];
-
-    for (let seg = 0; seg < 4; seg++) {
-      const base = seg * 6 + 2;
-      out[base] = anchorsX[seg] + handle * tanX[seg];
-      out[base + 1] = anchorsY[seg] + handle * tanY[seg];
-      out[base + 2] = anchorsX[seg + 1] - handle * tanX[seg + 1];
-      out[base + 3] = anchorsY[seg + 1] - handle * tanY[seg + 1];
-      out[base + 4] = anchorsX[seg + 1];
-      out[base + 5] = anchorsY[seg + 1];
-    }
-
-    return out;
   }
-
-  // Wave-propagated 3D twist from Circle (s = 0) to Infinity (s = 1):
-  // Inner center handles cross before outer apex handles so the right loop never flattens into a 1D stick
-  function evalCircleToInfinity(s: number): number[] {
-    if (s <= 0.0001) return [...P_CIRCLE];
-    if (s >= 0.9999) return [...P_INFINITY];
-
-    const out = new Array<number>(26);
-    for (let i = 0; i < 26; i++) {
-      out[i] = lerp(P_CIRCLE[i], P_INFINITY[i], s);
-    }
-
-    const wave = Math.sin(Math.PI * s);
-    const sInnerLead = Math.pow(s, 0.62); // Inner crossing leads near (12, 12)
-    const sOuterLag = Math.pow(s, 1.48);  // Outer apex follows near (19.8, 12)
-
-    // Left lobe subtle breathing while pinching to center
-    out[2] = lerp(P_CIRCLE[2], P_INFINITY[2], sInnerLead);
-    out[3] = lerp(P_CIRCLE[3], P_INFINITY[3], sInnerLead);
-    out[10] = lerp(P_CIRCLE[10], P_INFINITY[10], sInnerLead);
-    out[11] = lerp(P_CIRCLE[11], P_INFINITY[11], sInnerLead);
-
-    // Right lobe inner handles (C5, C8) cross early at center
-    out[14] = lerp(P_CIRCLE[14], P_INFINITY[14], sInnerLead) + 0.65 * wave;
-    out[15] = lerp(P_CIRCLE[15], P_INFINITY[15], sInnerLead);
-    out[22] = lerp(P_CIRCLE[22], P_INFINITY[22], sInnerLead) - 0.65 * wave;
-    out[23] = lerp(P_CIRCLE[23], P_INFINITY[23], sInnerLead);
-
-    // Right lobe outer handles (C6, C7) flip after the center has already opened up
-    out[16] = lerp(P_CIRCLE[16], P_INFINITY[16], sOuterLag) + 0.55 * wave;
-    out[17] = lerp(P_CIRCLE[17], P_INFINITY[17], sOuterLag);
-    out[20] = lerp(P_CIRCLE[20], P_INFINITY[20], sOuterLag) - 0.55 * wave;
-    out[21] = lerp(P_CIRCLE[21], P_INFINITY[21], sOuterLag);
-
-    // Right apex (P3) reaches outward with a slight 3D arc
-    out[18] = lerp(P_CIRCLE[18], P_INFINITY[18], s) + 0.45 * wave;
-
-    return out;
-  }
-
-  // Anti-symmetric S-ribbon uncurling between Line (s = 0) and Infinity (s = 1)
-  function evalLineToInfinity(s: number): number[] {
-    if (s <= 0.0001) return [...P_LINE];
-    if (s >= 0.9999) return [...P_INFINITY];
-
-    const out = new Array<number>(26);
-    const sEnds = Math.pow(s, 0.88);
-    const sLobes = Math.pow(s, 0.76);
-    const wave = Math.sin(Math.PI * s);
-
-    for (let i = 0; i < 26; i++) {
-      out[i] = lerp(P_LINE[i], P_INFINITY[i], sLobes);
-    }
-
-    // Free ends P0 and P4 sweep along opposite arches (S-wave) as the two loops pull taut / curl in
-    out[0] = lerp(P_LINE[0], P_INFINITY[0], sEnds);
-    out[1] = 12 - 3.3 * wave; // Left tip arches over top-left
-
-    out[24] = lerp(P_LINE[24], P_INFINITY[24], sEnds);
-    out[25] = 12 + 3.3 * wave; // Right tip arches under bottom-right
-
-    // Outer handles trail the tips smoothly
-    out[2] = lerp(P_LINE[2], P_INFINITY[2], sEnds);
-    out[3] = lerp(P_LINE[3], P_INFINITY[3], sLobes) - 1.4 * wave;
-
-    out[22] = lerp(P_LINE[22], P_INFINITY[22], sEnds);
-    out[23] = lerp(P_LINE[23], P_INFINITY[23], sLobes) + 1.4 * wave;
-
-    return out;
-  }
-
-  function evalPair(fromKind: ShapeKind, toKind: ShapeKind, s: number): number[] {
-    if (fromKind === toKind) return [...getTarget(toKind)];
-    if (fromKind === 'line' && toKind === 'circle') return evalLineToCircle(s);
-    if (fromKind === 'circle' && toKind === 'line') return evalLineToCircle(1 - s);
-    if (fromKind === 'circle' && toKind === 'infinity') return evalCircleToInfinity(s);
-    if (fromKind === 'infinity' && toKind === 'circle') return evalCircleToInfinity(1 - s);
-    if (fromKind === 'line' && toKind === 'infinity') return evalLineToInfinity(s);
-    return evalLineToInfinity(1 - s);
-  }
-
-  function toPath(p: number[], settledKind: ShapeKind | null = null): string {
-    if (settledKind === 'line') {
-      // Single pristine horizontal line from left to right (exact single stroke of width 2)
-      return 'M 4.20 12.00 L 19.80 12.00';
-    }
-    const close = settledKind === 'circle' || settledKind === 'infinity' ? ' Z' : '';
-    return (
-      `M ${p[0].toFixed(2)} ${p[1].toFixed(2)} ` +
-      `C ${p[2].toFixed(2)} ${p[3].toFixed(2)}, ${p[4].toFixed(2)} ${p[5].toFixed(2)}, ${p[6].toFixed(2)} ${p[7].toFixed(2)} ` +
-      `C ${p[8].toFixed(2)} ${p[9].toFixed(2)}, ${p[10].toFixed(2)} ${p[11].toFixed(2)}, ${p[12].toFixed(2)} ${p[13].toFixed(2)} ` +
-      `C ${p[14].toFixed(2)} ${p[15].toFixed(2)}, ${p[16].toFixed(2)} ${p[17].toFixed(2)}, ${p[18].toFixed(2)} ${p[19].toFixed(2)} ` +
-      `C ${p[20].toFixed(2)} ${p[21].toFixed(2)}, ${p[22].toFixed(2)} ${p[23].toFixed(2)}, ${p[24].toFixed(2)} ${p[25].toFixed(2)}` +
-      close
-    );
-  }
-
-  let currentPoints = [...P_LINE];
-  let pathD = $state<string>(toPath(P_LINE, 'line'));
-  let animId: number | null = null;
-  let prevMode: RepeatMode | null = null;
-  let activeFromKind: ShapeKind = 'line';
 
   function animateTo(fromKind: ShapeKind, toKind: ShapeKind) {
-    if (animId !== null) {
-      cancelAnimationFrame(animId);
-      animId = null;
-    }
-
     if (fromKind === toKind) {
-      currentPoints = [...getTarget(toKind)];
-      pathD = toPath(currentPoints, toKind);
+      applyRestingState(toKind);
       return;
     }
 
-    const startSnapshot = [...currentPoints];
-    const idealStart = evalPair(fromKind, toKind, 0);
-    const startTime = performance.now();
-    const duration = 480; // ms
+    cancelAnimations(activeAnims);
 
-    function tick(now: number) {
-      const elapsed = now - startTime;
-      const t = Math.min(1, Math.max(0, elapsed / duration));
-
-      // Expressive quintic-mixed deceleration (silky 120/144/240Hz follow-through)
-      const inv = 1 - t;
-      const ease = 1 - (0.35 * Math.pow(inv, 3) + 0.65 * Math.pow(inv, 5));
-
-      const choreo = evalPair(fromKind, toKind, ease);
-      const residualWeight = inv * inv; // Smoothly decays mid-flight interruption offsets
-
-      for (let i = 0; i < 26; i++) {
-        currentPoints[i] = choreo[i] + (startSnapshot[i] - idealStart[i]) * residualWeight;
-      }
-
-      if (t < 1) {
-        pathD = toPath(currentPoints, null);
-        animId = requestAnimationFrame(tick);
-      } else {
-        currentPoints = [...getTarget(toKind)];
-        pathD = toPath(currentPoints, toKind);
-        activeFromKind = toKind;
-        animId = null;
+    // Ensure the non-involved layer stays hidden cleanly
+    const kinds: ShapeKind[] = ['line', 'circle', 'infinity'];
+    for (const k of kinds) {
+      if (k !== fromKind && k !== toKind) {
+        const unused = getLayer(k);
+        if (unused) {
+          unused.style.opacity = '0';
+          unused.style.transform = 'scale(0.55)';
+        }
       }
     }
 
-    animId = requestAnimationFrame(tick);
+    const outEl = getLayer(fromKind);
+    const inEl = getLayer(toKind);
+    const spinDir = toKind === 'infinity' ? 1 : toKind === 'circle' ? 1 : -1;
+
+    runGpuAnim(
+      activeAnims,
+      outEl,
+      [
+        { opacity: 1, transform: 'scale(1) rotate(0deg)' },
+        { opacity: 0, transform: `scale(0.45, 0.72) rotate(${spinDir * 42}deg)` }
+      ],
+      { duration: 155, easing: 'cubic-bezier(0.4, 0, 1, 1)' },
+      () => {
+        if (outEl) {
+          outEl.style.opacity = '0';
+          outEl.style.transform = 'scale(0.55)';
+        }
+      }
+    );
+
+    runGpuAnim(
+      activeAnims,
+      inEl,
+      [
+        { opacity: 0, transform: `scale(0.45) rotate(${-spinDir * 48}deg)` },
+        { opacity: 1, transform: `scale(1.16) rotate(${spinDir * 6}deg)`, offset: 0.56 },
+        { opacity: 1, transform: `scale(0.95) rotate(${-spinDir * 2}deg)`, offset: 0.8 },
+        { opacity: 1, transform: 'scale(1) rotate(0deg)' }
+      ],
+      { duration: 340, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+      () => {
+        if (inEl) {
+          inEl.style.opacity = '1';
+          inEl.style.transform = 'scale(1) rotate(0deg)';
+        }
+      }
+    );
   }
 
-  $effect(() => {
-    const currentMode = mode;
-    const nextKind = getShapeKind(currentMode);
+  onMount(() => {
+    initialized = true;
+    const initKind = getShapeKind(mode);
+    prevKind = initKind;
+    applyRestingState(initKind);
+  });
 
-    if (prevMode === null) {
-      prevMode = currentMode;
-      activeFromKind = nextKind;
-      currentPoints = [...getTarget(nextKind)];
-      pathD = toPath(currentPoints, nextKind);
-    } else if (prevMode !== currentMode) {
-      const fromKind = getShapeKind(prevMode);
-      prevMode = currentMode;
-      animateTo(fromKind, nextKind);
+  $effect(() => {
+    const nextKind = getShapeKind(mode);
+    if (!initialized) return;
+
+    if (prevKind === null) {
+      prevKind = nextKind;
+      applyRestingState(nextKind);
+    } else if (prevKind !== nextKind) {
+      const from = prevKind;
+      prevKind = nextKind;
+      animateTo(from, nextKind);
     }
   });
 
   onDestroy(() => {
-    if (animId !== null) {
-      cancelAnimationFrame(animId);
-    }
+    cancelAnimations(activeAnims);
   });
 </script>
 
-<svg
-  width={size}
-  height={size}
-  viewBox="0 0 24 24"
-  fill="none"
-  class="overflow-visible select-none pointer-events-none {className}"
+<div
+  class="repeat-icon-wrapper relative inline-flex items-center justify-center select-none overflow-visible {className}"
+  style="width: {typeof size === 'number' ? `${size}px` : size}; height: {typeof size === 'number' ? `${size}px` : size};"
   aria-label={`Playback mode: ${mode === 'shuffle' ? 'shuffle' : mode === 'one' ? 'repeat one' : mode === 'all' ? 'repeat all' : 'off'}`}
 >
-  <!-- Morphing Vector Ribbon (Line <-> Circle <-> 8 Loop) -->
-  <path
-    d={pathD}
-    stroke="currentColor"
-    stroke-width="2"
-    stroke-linecap="round"
-    stroke-linejoin="round"
-    class="transition-colors duration-200"
-  />
-</svg>
+  <svg
+    bind:this={lineEl}
+    viewBox="0 0 24 24"
+    fill="none"
+    class="repeat-layer absolute inset-0 w-full h-full overflow-visible"
+  >
+    <path d={PATH_LINE} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </svg>
+
+  <svg
+    bind:this={circleEl}
+    viewBox="0 0 24 24"
+    fill="none"
+    class="repeat-layer absolute inset-0 w-full h-full overflow-visible"
+  >
+    <path d={PATH_CIRCLE} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </svg>
+
+  <svg
+    bind:this={infinityEl}
+    viewBox="0 0 24 24"
+    fill="none"
+    class="repeat-layer absolute inset-0 w-full h-full overflow-visible"
+  >
+    <path d={PATH_INFINITY} stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </svg>
+</div>
+
+<style>
+  .repeat-icon-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .repeat-layer {
+    transform-origin: center center;
+    will-change: transform, opacity;
+    pointer-events: none;
+  }
+</style>

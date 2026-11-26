@@ -161,7 +161,7 @@
   {#if isMobileView && mountedTabs.has('now_playing')}
     <!-- Full-Screen Animated Bigger Player on Mobile (Android & iOS) -->
     <div
-      class="fixed inset-0 z-50 bg-black transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] {currentTab === 'now_playing' ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'}"
+      class="fixed inset-0 z-50 bg-black transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[transform,opacity] {currentTab === 'now_playing' ? 'translate-y-0 opacity-100 pointer-events-auto' : 'translate-y-full opacity-0 pointer-events-none'}"
     >
       <NowPlayingView onClose={toggleNowPlaying} isVisible={currentTab === 'now_playing'} />
     </div>

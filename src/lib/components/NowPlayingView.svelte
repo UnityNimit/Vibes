@@ -457,7 +457,7 @@
           <button
             type="button"
             onclick={onClose}
-            class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer"
+            class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-[transform,color] duration-150 cursor-pointer"
             aria-label="Close bigger player"
           >
             <BackIcon size={24} strokeWidth={2.2} direction="down" />
@@ -477,7 +477,7 @@
           <button
             type="button"
             onclick={() => (showSimilarMobile = true)}
-            class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-all cursor-pointer"
+            class="w-10 h-10 rounded-full flex items-center justify-center text-neutral-400 hover:text-white active:scale-90 transition-[transform,color] duration-150 cursor-pointer"
             aria-label="Open queue and similar tracks"
           >
             <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.2">
@@ -494,7 +494,7 @@
           tabindex="0"
           onclick={handleArtClick}
           onkeydown={(e) => { if (e.key === 'Enter') toggleLyrics(); }}
-          class="relative w-[76vw] max-w-[300px] aspect-square rounded-2xl overflow-hidden bg-[#0c0c0e] shadow-[0_16px_48px_rgba(0,0,0,0.9)] flex-shrink-0 cursor-pointer"
+          class="relative w-[76vw] max-w-[300px] aspect-square rounded-2xl overflow-hidden bg-[#0c0c0e] flex-shrink-0 cursor-pointer"
         >
           <!-- Album Art Image -->
           <div class="w-full h-full {player.showLyrics ? 'brightness-[0.35] blur-md scale-105' : 'brightness-100 blur-0 scale-100'} transition-all duration-500 ease-out">
@@ -531,7 +531,7 @@
                 {#each player.parsedLyrics as line, i}
                   <p
                     data-lyric-index={i}
-                    class="w-full px-3 py-1.5 text-center leading-relaxed transition-[color,opacity,filter] duration-300 text-sm font-normal tracking-wide select-none pointer-events-none {player.activeLyricIndex === i ? 'text-white opacity-100 drop-shadow-[0_2px_12px_rgba(255,255,255,0.45)]' : 'text-white/35 opacity-70'}"
+                    class="w-full px-3 py-1.5 text-center leading-relaxed transition-[color,opacity] duration-300 text-sm font-normal tracking-wide select-none pointer-events-none {player.activeLyricIndex === i ? 'text-white opacity-100 drop-shadow-[0_2px_12px_rgba(255,255,255,0.45)]' : 'text-white/35 opacity-70'}"
                   >
                     {line.text.trim() || '• • •'}
                   </p>
@@ -599,7 +599,7 @@
           type="button"
           onclick={() => player.toggleDownload()}
           disabled={player.isDownloading}
-          class="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-all cursor-pointer active:scale-90 {player.isCached ? 'text-accent' : 'text-neutral-400 hover:text-white'}"
+          class="w-11 h-11 rounded-full flex items-center justify-center flex-shrink-0 transition-[transform,color] duration-150 cursor-pointer active:scale-90 {player.isCached ? 'text-accent' : 'text-neutral-400 hover:text-white'}"
           aria-label="Download song"
         >
           <DownloadIcon isDownloading={player.isDownloading} isSaved={player.isCached} size={24} strokeWidth={2} />
@@ -629,7 +629,7 @@
         <!-- 1. Heart / Like -->
         <button
           onclick={() => player.toggleLike()}
-          class="w-11 h-11 rounded-full flex items-center justify-center text-neutral-400 active:scale-90 transition-all cursor-pointer {player.isLiked ? 'text-accent' : ''}"
+          class="w-11 h-11 rounded-full flex items-center justify-center text-neutral-400 active:scale-90 transition-[transform,color] duration-150 cursor-pointer {player.isLiked ? 'text-accent' : ''}"
           aria-label={player.isLiked ? 'Unlike' : 'Like'}
         >
           <HeartIcon isLiked={player.isLiked} size={24} strokeWidth={2} />
@@ -638,7 +638,7 @@
         <!-- 2. Previous Track -->
         <button
           onclick={() => player.prev()}
-          class="w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-90 transition-all cursor-pointer"
+          class="w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform duration-150 cursor-pointer"
           aria-label="Previous track"
         >
           <PrevIcon size={28} />
@@ -647,7 +647,7 @@
         <!-- 3. Play / Pause (Large Center Button, Outer Circle Removed, Bigger Icon) -->
         <button
           onclick={() => player.togglePlay()}
-          class="text-white hover:scale-105 active:scale-90 transition-transform cursor-pointer flex items-center justify-center flex-shrink-0 p-2 mx-2"
+          class="text-white hover:scale-105 active:scale-90 transition-transform duration-150 cursor-pointer flex items-center justify-center flex-shrink-0 p-2 mx-2"
           aria-label={player.isPlaying ? 'Pause' : 'Play'}
         >
           <PlayPauseIcon
@@ -660,7 +660,7 @@
         <!-- 4. Next Track -->
         <button
           onclick={() => player.next()}
-          class="w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-90 transition-all cursor-pointer"
+          class="w-12 h-12 rounded-full flex items-center justify-center text-white active:scale-90 transition-transform duration-150 cursor-pointer"
           aria-label="Next track"
         >
           <NextIcon size={28} />
@@ -669,7 +669,7 @@
         <!-- 5. Repeat / Shuffle Mode -->
         <button
           onclick={() => player.toggleRepeat()}
-          class="w-11 h-11 rounded-full flex items-center justify-center text-neutral-400 active:scale-90 transition-all cursor-pointer {player.repeatMode !== 'off' ? 'text-accent' : ''}"
+          class="w-11 h-11 rounded-full flex items-center justify-center text-neutral-400 active:scale-90 transition-[transform,color] duration-150 cursor-pointer {player.repeatMode !== 'off' ? 'text-accent' : ''}"
           aria-label="Toggle repeat or shuffle mode"
         >
           <RepeatIcon mode={player.repeatMode} size={33} />
@@ -681,7 +681,7 @@
         <button
           type="button"
           onclick={() => (showMobilePlaylistMenu = true)}
-          class="w-12 h-12 rounded-full flex items-center justify-center transition-all cursor-pointer active:scale-90 {isCurrentSongInAnyPlaylist ? 'text-accent' : 'text-neutral-400 hover:text-white'}"
+          class="w-12 h-12 rounded-full flex items-center justify-center transition-[transform,color] duration-150 cursor-pointer active:scale-90 {isCurrentSongInAnyPlaylist ? 'text-accent' : 'text-neutral-400 hover:text-white'}"
           aria-label="Add to playlist"
         >
           <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -1003,7 +1003,7 @@
                 {#each player.parsedLyrics as line, i}
                   <p
                     data-lyric-index={i}
-                    class="w-full max-w-sm sm:max-w-md px-3 py-1.5 text-center leading-relaxed transition-[color,opacity,filter] duration-300 text-sm sm:text-base font-normal tracking-wide select-none pointer-events-none {player.activeLyricIndex === i ? 'text-white opacity-100 drop-shadow-[0_2px_12px_rgba(255,255,255,0.45)]' : 'text-white/35 opacity-70'}"
+                    class="w-full max-w-sm sm:max-w-md px-3 py-1.5 text-center leading-relaxed transition-[color,opacity] duration-300 text-sm sm:text-base font-normal tracking-wide select-none pointer-events-none {player.activeLyricIndex === i ? 'text-white opacity-100 drop-shadow-[0_2px_12px_rgba(255,255,255,0.45)]' : 'text-white/35 opacity-70'}"
                   >
                     {line.text.trim() || '• • •'}
                   </p>

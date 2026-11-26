@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
+  import { cancelAnimations, runGpuAnim } from '../iconAnim';
 
   interface Props {
     /** Icon width and height in px (or CSS unit) */
@@ -22,96 +23,36 @@
     active = false
   }: Props = $props();
 
-  // ---------------------------------------------------------------------------
-  // BACK NAVIGATION CHEVRON GEOMETRY & KINETIC CHOREOGRAPHY
-  // Left Rest: P0 (15, 5) -> Apex (8, 12) -> P2 (15, 19)
-  // Down Rest: P0 (5, 9)  -> Apex (12, 16) -> P2 (19, 9)
-  // ---------------------------------------------------------------------------
-
-  function clamp(v: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, v));
-  }
-
-  function lerp(a: number, b: number, t: number): number {
-    return a + (b - a) * t;
-  }
-
-  // Evaluates dynamic curved/straight chevron path with kinetic vertex pull and wing bow
-  function buildPath(t: number, dir: 'left' | 'down'): string {
-    // Impulse: 0 -> 0.25 (Pulls back in travel direction)
-    //          0.25 -> 1.0 (Damped spring rebound back to rest)
-    const pull = t < 0.25 ? Math.sin((t / 0.25) * (Math.PI / 2)) : Math.exp(-t * 6) * Math.cos((t - 0.25) * Math.PI * 3.8);
-    const apexOffset = -2.8 * pull; // Pulls backward (left or up)
-    const wingBow = 1.2 * pull;
-
-    if (dir === 'left') {
-      const x0 = 15;
-      const y0 = 5;
-      const xApex = 8 + apexOffset;
-      const yApex = 12;
-      const x1 = 15;
-      const y1 = 19;
-
-      if (Math.abs(pull) < 0.01) {
-        return `M ${x0} ${y0} L ${xApex.toFixed(2)} ${yApex} L ${x1} ${y1}`;
-      }
-
-      // Bowing wings with quadratic curves
-      const c0x = lerp(x0, xApex, 0.5) + wingBow * 0.4;
-      const c0y = lerp(y0, yApex, 0.5) - wingBow * 0.3;
-      const c1x = lerp(xApex, x1, 0.5) + wingBow * 0.4;
-      const c1y = lerp(yApex, y1, 0.5) + wingBow * 0.3;
-
-      return `M ${x0} ${y0} Q ${c0x.toFixed(2)} ${c0y.toFixed(2)} ${xApex.toFixed(2)} ${yApex} Q ${c1x.toFixed(2)} ${c1y.toFixed(2)} ${x1} ${y1}`;
-    } else {
-      // Down direction
-      const x0 = 5;
-      const y0 = 9;
-      const xApex = 12;
-      const yApex = 16 - apexOffset; // Pulls downward
-      const x1 = 19;
-      const y1 = 9;
-
-      if (Math.abs(pull) < 0.01) {
-        return `M ${x0} ${y0} L ${xApex} ${yApex.toFixed(2)} L ${x1} ${y1}`;
-      }
-
-      const c0x = lerp(x0, xApex, 0.5) - wingBow * 0.3;
-      const c0y = lerp(y0, yApex, 0.5) - wingBow * 0.4;
-      const c1x = lerp(xApex, x1, 0.5) + wingBow * 0.3;
-      const c1y = lerp(yApex, y1, 0.5) - wingBow * 0.4;
-
-      return `M ${x0} ${y0} Q ${c0x.toFixed(2)} ${c0y.toFixed(2)} ${xApex} ${yApex.toFixed(2)} Q ${c1x.toFixed(2)} ${c1y.toFixed(2)} ${x1} ${y1}`;
-    }
-  }
-
-  let animT = $state<number>(0);
-  let currentD = $derived(buildPath(animT, direction));
-  let rafId: number | null = null;
-  let animStartTime = 0;
-  const DURATION = 380; // ms
+  let svgEl = $state<SVGSVGElement | null>(null);
+  const activeAnims: Animation[] = [];
 
   export function triggerPulse() {
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-    }
+    cancelAnimations(activeAnims);
 
-    animStartTime = performance.now();
+    const keyframes: Keyframe[] =
+      direction === 'left'
+        ? [
+            { transform: 'translate3d(0, 0, 0) scale(1, 1)' },
+            { transform: 'translate3d(-3px, 0, 0) scale(1.08, 0.92)', offset: 0.28 },
+            { transform: 'translate3d(1px, 0, 0) scale(0.96, 1.04)', offset: 0.68 },
+            { transform: 'translate3d(0, 0, 0) scale(1, 1)' }
+          ]
+        : [
+            { transform: 'translate3d(0, 0, 0) scale(1, 1)' },
+            { transform: 'translate3d(0, 3px, 0) scale(0.92, 1.08)', offset: 0.28 },
+            { transform: 'translate3d(0, -1px, 0) scale(1.04, 0.96)', offset: 0.68 },
+            { transform: 'translate3d(0, 0, 0) scale(1, 1)' }
+          ];
 
-    function tick(now: number) {
-      const elapsed = now - animStartTime;
-      const t = clamp(elapsed / DURATION, 0, 1);
-      animT = t;
-
-      if (t < 1) {
-        rafId = requestAnimationFrame(tick);
-      } else {
-        animT = 0;
-        rafId = null;
+    runGpuAnim(
+      activeAnims,
+      svgEl,
+      keyframes,
+      { duration: 320, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+      () => {
+        if (svgEl) svgEl.style.transform = 'translate3d(0, 0, 0) scale(1, 1)';
       }
-    }
-
-    rafId = requestAnimationFrame(tick);
+    );
   }
 
   let prevActive: boolean | null = null;
@@ -128,9 +69,7 @@
   });
 
   onDestroy(() => {
-    if (rafId !== null) {
-      cancelAnimationFrame(rafId);
-    }
+    cancelAnimations(activeAnims);
   });
 </script>
 
@@ -142,6 +81,7 @@
   onclick={() => triggerPulse()}
 >
   <svg
+    bind:this={svgEl}
     viewBox="0 0 24 24"
     fill="none"
     stroke="currentColor"
@@ -150,7 +90,7 @@
     stroke-linejoin="round"
     class="back-svg relative z-10 w-full h-full overflow-visible"
   >
-    <path d={currentD} class="back-path" />
+    <path d={direction === 'left' ? 'M 15 5 L 8 12 L 15 19' : 'M 5 9 L 12 16 L 19 9'} class="pointer-events-none" />
   </svg>
 </div>
 
@@ -164,10 +104,6 @@
 
   .back-svg {
     transform-origin: center center;
-  }
-
-  .back-path {
-    pointer-events: none;
-    will-change: d;
+    will-change: transform;
   }
 </style>
